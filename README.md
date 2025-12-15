@@ -6,3 +6,7 @@ With a small display, expressive animations, and gentle interactions, Capyboo br
 Built as a fun blend of hardware + software, Capyboo focuses on personality, simplicity, and delightful user experience rather than complexity.
 
 ![Capyboo](hardware/images/capyboo-1.jpeg)
+
+# Circuit Diagram
+
+![Circuit-Diagram](hardware/images/circuit-diagram.png)
