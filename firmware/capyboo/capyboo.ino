@@ -48,5 +48,10 @@ void setup() {
 void loop() {
     // Handle BLE connection/disconnection (required for BLE communication)
     handleBLESerial();
+
+    playLookRightFromMiddleAnimation();
+    delay(2000);
+    playLookMiddleFromRightAnimation();
+    delay(2000);
 }
 
