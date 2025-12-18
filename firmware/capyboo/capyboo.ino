@@ -53,5 +53,26 @@ void loop() {
     delay(2000);
     playLookMiddleFromRightAnimation();
     delay(2000);
+    playLookLeftFromMiddleAnimation();
+    delay(2000);
+    playLookMiddleFromLeftAnimation();
+    delay(2000);
+    playNormalToFunnyEyesAnimation();
+    playTongueOutAnimation();
+    playTongueOutAnimation();
+    playTongueOutAnimation();
+    playTongueOutAnimation();
+    playTongueOutAnimation();
+    playTongueOutAnimation();
+    playTongueOutAnimation();
+    playTongueOutAnimation();
+    playTongueOutAnimation();
+    playTongueOutAnimation();
+    playTongueOutAnimation();
+    playTongueOutAnimation();
+    playTongueOutAnimation();
+    playTongueOutAnimation();
+    playFunnyEyesToNormalAnimation();
+    delay(2000);
 }
 
