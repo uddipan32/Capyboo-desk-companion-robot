@@ -10,3 +10,7 @@ Built as a fun blend of hardware + software, Capyboo focuses on personality, sim
 # Circuit Diagram
 
 ![Circuit-Diagram](hardware/images/circuit-diagram.png)
+
+# Animations
+
+![Look-right] (firmware/animations/look-right.gif)
