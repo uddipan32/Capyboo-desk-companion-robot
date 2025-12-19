@@ -13,4 +13,4 @@ Built as a fun blend of hardware + software, Capyboo focuses on personality, sim
 
 # Animations
 
-![Look-right] (firmware/animations/look-right.gif)
+![Look-right](firmware/animations/look-right.gif)
