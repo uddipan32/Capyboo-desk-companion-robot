@@ -82,6 +82,18 @@ const unsigned long ANIMATION_DELAY = 2000; // Delay between animations in ms
 void loop() {
     // Handle BLE connection/disconnection (required for BLE communication)
     handleBLESerial();
+
+
+    if (bleSerialAvailable()) {
+        String command = bleSerialRead();
+        command.toLowerCase();
+        command.trim();
+        Serial.print("Received BLE command: ");
+        Serial.println(command);
+        display_text(command.c_str());
+        delay(2000);
+    }
+
     
     // Handle MQTT connection and messages (must be called regularly)
     handleMQTT();
