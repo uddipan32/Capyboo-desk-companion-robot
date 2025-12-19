@@ -1,11 +1,12 @@
 #include "bluetooth.h"
 #include "display.h"
 #include "wifi.h"
+#include "wifi_storage.h"
 #include "mqtt.h"
 #include <Wire.h>
 
 #include "face_animation.h"
-#include "secrets.h"  // WiFi and MQTT credentials
+#include "secrets.h"  // MQTT credentials (WiFi now stored in EEPROM)
 
 // Touch sensor pin (from definitions.h)
 const int TOUCH_SENSOR_PIN = 4;
@@ -13,6 +14,9 @@ const int TOUCH_SENSOR_PIN = 4;
 
 void setup() {
     Serial.begin(115200);
+    
+    // Initialize WiFi storage
+    initWiFiStorage();
     
     // Initialize BLE Serial
     initBLESerial("Capyboo");
@@ -42,17 +46,37 @@ void setup() {
     display.display();
     delay(2000);
 
-     // Connect to WiFi
-    if (!connectWifi(WIFI_SSID, WIFI_PASSWORD)) {
-        Serial.println("Failed to connect to WiFi");
-        display_text("Failed to connect to WiFi");
-        delay(2000);
+    // Try to connect to WiFi using stored credentials
+    char storedSSID[64] = "";
+    char storedPassword[64] = "";
+    bool wifiConnected = false;
+    
+    if (loadWiFiCredentials(storedSSID, storedPassword, 64)) {
+        Serial.println("Found stored WiFi credentials");
+        display_text("Connecting...");
+        wifiConnected = connectWifi(storedSSID, storedPassword);
     } else {
+        // Try using secrets.h as fallback (for first-time setup)
+        // Serial.println("No stored WiFi credentials, trying secrets.h");
+        // if (strlen(WIFI_SSID) > 0) {
+        //     display_text("Connecting...");
+        //     wifiConnected = connectWifi(WIFI_SSID, WIFI_PASSWORD);
+        //     // Save to storage if connection successful
+        //     if (wifiConnected) {
+        //         saveWiFiCredentials(WIFI_SSID, WIFI_PASSWORD);
+        //     }
+        // }
+    }
+    
+    if (wifiConnected) {
         Serial.println("Connected to WiFi");
-        String wifiMsg = "Connected to WiFi: " + String(WIFI_SSID);
+        String wifiMsg = "WiFi: " + String(storedSSID[0] != '\0' ? storedSSID : WIFI_SSID);
         display_text(wifiMsg.c_str());
         delay(2000);
-        
+    } else {
+        Serial.println("WiFi not connected");
+        display_text("WiFi: Not connected\nUse BLE to setup");
+        delay(2000);
     }
 
     // Initialize MQTT
@@ -86,12 +110,70 @@ void loop() {
 
     if (bleSerialAvailable()) {
         String command = bleSerialRead();
-        command.toLowerCase();
         command.trim();
+        String lowerCommand = command;
+        lowerCommand.toLowerCase();
+        
         Serial.print("Received BLE command: ");
         Serial.println(command);
         display_text(command.c_str());
         delay(2000);
+        
+        // Handle WiFi setup command: "wifi:SSID:password"
+        if (lowerCommand.startsWith("wifi:")) {
+            int firstColon = command.indexOf(':');
+            int secondColon = command.indexOf(':', firstColon + 1);
+            
+            if (secondColon > 0) {
+                String ssid = command.substring(firstColon + 1, secondColon);
+                String password = command.substring(secondColon + 1);
+                
+                Serial.print("Setting WiFi: SSID=");
+                Serial.print(ssid);
+                Serial.println(" (password hidden)");
+                
+                display_text("Setting WiFi...");
+                delay(1000);
+                
+                // Save credentials
+                if (saveWiFiCredentials(ssid.c_str(), password.c_str())) {
+                    // Try to connect
+                    if (connectWifi(ssid.c_str(), password.c_str())) {
+                        display_text("WiFi connected!");
+                        bleSerialPrintln("WiFi connected successfully!");
+                        delay(2000);
+                        
+                        // Reconnect MQTT if WiFi is now available
+                        if (initMQTT()) {
+                            connectMQTT();
+                        }
+                    } else {
+                        display_text("WiFi failed!");
+                        bleSerialPrintln("WiFi connection failed. Credentials saved.");
+                        delay(2000);
+                    }
+                } else {
+                    display_text("Save failed!");
+                    bleSerialPrintln("Failed to save WiFi credentials");
+                    delay(2000);
+                }
+            } else {
+                bleSerialPrintln("Invalid format. Use: wifi:SSID:password");
+            }
+        }
+        // Handle clear WiFi command
+        else if (lowerCommand == "clearwifi" || lowerCommand == "wificlear") {
+            clearWiFiCredentials();
+            disconnectWifi();
+            display_text("WiFi cleared");
+            bleSerialPrintln("WiFi credentials cleared");
+            delay(2000);
+        }
+        // Handle other commands
+        else {
+            display_text(command.c_str());
+            delay(2000);
+        }
     }
 
     

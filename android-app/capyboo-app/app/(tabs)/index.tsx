@@ -1,13 +1,15 @@
 import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, TouchableOpacity } from 'react-native';
 
 import { HelloWave } from '@/components/hello-wave';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 
 export default function HomeScreen() {
+  const router = useRouter();
+
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
@@ -18,8 +20,20 @@ export default function HomeScreen() {
         />
       }>
       <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
+        <ThemedText type="title">Capyboo Robot</ThemedText>
         <HelloWave />
+      </ThemedView>
+      
+      <ThemedView style={styles.stepContainer}>
+        <TouchableOpacity
+          style={styles.wifiButton}
+          onPress={() => router.push('/wifi-setup')}
+        >
+          <ThemedText style={styles.wifiButtonText}>📶 WiFi Setup</ThemedText>
+          <ThemedText style={styles.wifiButtonSubtext}>
+            Connect Capyboo to your WiFi network
+          </ThemedText>
+        </TouchableOpacity>
       </ThemedView>
       <ThemedView style={styles.stepContainer}>
         <ThemedText type="subtitle">Step 1: Try it</ThemedText>
@@ -87,6 +101,24 @@ const styles = StyleSheet.create({
   stepContainer: {
     gap: 8,
     marginBottom: 8,
+  },
+  wifiButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    padding: 20,
+    marginVertical: 12,
+    alignItems: 'center',
+  },
+  wifiButtonText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  wifiButtonSubtext: {
+    color: '#fff',
+    fontSize: 14,
+    opacity: 0.9,
   },
   reactLogo: {
     height: 178,

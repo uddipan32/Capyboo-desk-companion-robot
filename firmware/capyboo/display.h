@@ -16,13 +16,52 @@ void display_text(const char* text) {
     display.setTextColor(SH110X_WHITE);
     display.setTextSize(1);
     
-    // Center the text
-    int16_t x1, y1;
-    uint16_t w, h;
-    display.getTextBounds(text, 0, 0, &x1, &y1, &w, &h);
-    int16_t x = (128 - w) / 2;
-    int16_t y = (64 - h) / 2;
-    display.setCursor(x, y);
-    display.println(text);
+    // Calculate how many characters fit per line (128 pixels / ~6 pixels per char)
+    const int charsPerLine = 21;  // Approximately 21 characters per line at size 1
+    const int maxLines = 8;        // Maximum lines that fit (64 pixels / 8 pixels per line)
+    
+    String textStr = String(text);
+    int textLen = textStr.length();
+    
+    // If text fits on one line, center it
+    if (textLen <= charsPerLine) {
+        int16_t x1, y1;
+        uint16_t w, h;
+        display.getTextBounds(text, 0, 0, &x1, &y1, &w, &h);
+        int16_t x = (128 - w) / 2;
+        int16_t y = (64 - h) / 2;
+        display.setCursor(x, y);
+        display.println(text);
+    } else {
+        // Text is too long - wrap to multiple lines
+        int line = 0;
+        int pos = 0;
+        
+        while (pos < textLen && line < maxLines) {
+            int endPos = pos + charsPerLine;
+            if (endPos > textLen) {
+                endPos = textLen;
+            }
+            
+            // Extract line
+            String lineText = textStr.substring(pos, endPos);
+            
+            // Display line (left-aligned for multi-line)
+            display.setCursor(0, line * 8);  // 8 pixels per line at size 1
+            display.println(lineText);
+            
+            pos = endPos;
+            line++;
+        }
+        
+        // If text was truncated, show ellipsis on last line
+        if (pos < textLen && line >= maxLines) {
+            display.setCursor(0, (maxLines - 1) * 8);
+            String lastLine = textStr.substring((maxLines - 1) * charsPerLine, (maxLines - 1) * charsPerLine + charsPerLine - 3);
+            display.print(lastLine);
+            display.print("...");
+        }
+    }
+    
     display.display();
 }

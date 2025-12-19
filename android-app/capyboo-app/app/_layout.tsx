@@ -1,3 +1,9 @@
+// Polyfill for Buffer (needed for BLE service)
+import { Buffer } from 'buffer';
+if (typeof global.Buffer === 'undefined') {
+  global.Buffer = Buffer;
+}
+
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -17,6 +23,7 @@ export default function RootLayout() {
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+        <Stack.Screen name="wifi-setup" options={{ title: 'WiFi Setup', presentation: 'card' }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
