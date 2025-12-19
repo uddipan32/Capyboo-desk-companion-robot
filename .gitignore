@@ -1,0 +1,17 @@
+# Secrets and credentials
+firmware/capyboo/secrets.h
+
+# Arduino build files
+firmware/capyboo/*.hex
+firmware/capyboo/*.elf
+firmware/capyboo/*.bin
+
+# IDE files
+.vscode/
+.idea/
+*.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
