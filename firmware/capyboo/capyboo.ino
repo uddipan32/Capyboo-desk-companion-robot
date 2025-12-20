@@ -218,59 +218,80 @@ void loop() {
         // Reset animation timing after handling MQTT message
         lastAnimationTime = millis();
     }
+
+    playIdleToSadAnimation();
+    playSadToCryAnimation();
+    playCryingAnimation();
+    playCryingAnimation();
+    playCryingAnimation();
+    playCryingAnimation();
+    playCryingAnimation();
+    playCryingAnimation();
+    playCryingAnimation();
+    playCryingAnimation();
+    playCryingAnimation();
+    playCryingAnimation();
+    playCryingAnimation();
+    playCryingAnimation();
+    playCryingAnimation();
+    playCryingAnimation();
+    playCryingAnimation();
+    playCryingAnimation();
+    playCryToSadAnimation();
+    playSadToIdleAnimation();
     
     // Play animation sequence continuously, checking MQTT between animations
-    unsigned long currentTime = millis();
-    if (currentTime - lastAnimationTime >= ANIMATION_DELAY) {
-        // Check MQTT again before playing animation
-        handleMQTT();
+    // unsigned long currentTime = millis();
+    // if (currentTime - lastAnimationTime >= ANIMATION_DELAY) {
+    //     // Check MQTT again before playing animation
+    //     handleMQTT();
         
-        // Play next animation in sequence
-        switch (animationIndex) {
-            case 0:
-                playLookRightFromMiddleAnimation();
-                break;
-            case 1:
-                playLookMiddleFromRightAnimation();
-                break;
-            case 2:
-                playLookLeftFromMiddleAnimation();
-                break;
-            case 3:
-                playLookMiddleFromLeftAnimation();
-                break;
-            case 4:
-                playNormalToFunnyEyesAnimation();
-                break;
-            case 5:
-            case 6:
-            case 7:
-            case 8:
-            case 9:
-            case 10:
-            case 11:
-            case 12:
-            case 13:
-            case 14:
-            case 15:
-            case 16:
-            case 17:
-                playTongueOutAnimation();
-                break;
-            case 18:
-                playFunnyEyesToNormalAnimation();
-                break;
-            default:
-                animationIndex = -1; // Reset to start
-                break;
-        }
+    //     // Play next animation in sequence
+    //     switch (animationIndex) {
+    //         case 0:
+    //             playLookRightFromMiddleAnimation();
+    //             break;
+    //         case 1:
+    //             playLookMiddleFromRightAnimation();
+    //             break;
+    //         case 2:
+    //             playLookLeftFromMiddleAnimation();
+    //             break;
+    //         case 3:
+    //             playLookMiddleFromLeftAnimation();
+    //             break;
+    //         case 4:
+    //             playNormalToFunnyEyesAnimation();
+    //             break;
+    //         case 5:
+    //         case 6:
+    //         case 7:
+    //         case 8:
+    //         case 9:
+    //         case 10:
+    //         case 11:
+    //         case 12:
+    //         case 13:
+    //         case 14:
+    //         case 15:
+    //         case 16:
+    //         case 17:
+    //             playTongueOutAnimation();
+    //             break;
+    //         case 18:
+    //             playFunnyEyesToNormalAnimation();
+    //             break;
+    //         default:
+    //             animationIndex = -1; // Reset to start
+    //             break;
+    //     }
         
-        animationIndex++;
-        if (animationIndex > 18) {
-            animationIndex = 0; // Loop back to start
-        }
+    //     animationIndex++;
+    //     if (animationIndex > 18) {
+    //         animationIndex = 0; // Loop back to start
+    //     }
         
-        lastAnimationTime = currentTime;
-    }
+    //     lastAnimationTime = currentTime;
+    // }
 }
 
