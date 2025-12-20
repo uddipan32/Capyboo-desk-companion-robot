@@ -239,6 +239,26 @@ void loop() {
     playCryingAnimation();
     playCryToSadAnimation();
     playSadToIdleAnimation();
+    playEnjoyStartAnimation();
+    playEnjoyingAnimation();
+    playEnjoyingAnimation();
+    playEnjoyingAnimation();
+    playEnjoyingAnimation();
+    playEnjoyingAnimation();
+    playEnjoyingAnimation();
+    playEnjoyingAnimation();
+    playEnjoyingAnimation();
+    playEnjoyingAnimation();
+    playEnjoyingAnimation();
+    playEnjoyEndAnimation();
+    playIdleToHappyAnimation();
+    delay(2000);
+    playHappyToIdleAnimation();
+    delay(2000);
+    playIdleToAngryAnimation();
+    delay(2000);
+    playAngryToIdleAnimation();
+
     
     // Play animation sequence continuously, checking MQTT between animations
     // unsigned long currentTime = millis();
