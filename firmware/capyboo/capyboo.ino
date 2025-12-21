@@ -53,16 +53,16 @@ void setup() {
     display.setTextColor(SH110X_WHITE);
     display.setTextSize(3);
     
-    // Center the text
-    int16_t x1, y1;
-    uint16_t w, h;
-    display.getTextBounds("Capyboo", 0, 0, &x1, &y1, &w, &h);
-    int16_t x = (128 - w) / 2;
-    int16_t y = (64 - h) / 2;
-    display.setCursor(x, y);
-    display.println("Capyboo");
-    display.display();
-    delay(2000);
+    // // Center the text
+    // int16_t x1, y1;
+    // uint16_t w, h;
+    // display.getTextBounds("Capyboo", 0, 0, &x1, &y1, &w, &h);
+    // int16_t x = (128 - w) / 2;
+    // int16_t y = (64 - h) / 2;
+    // display.setCursor(x, y);
+    // display.println("Capyboo");
+    // display.display();
+    // delay(2000);
     
     // Play wakeup animation once at startup
     playWakeupAnimation();
