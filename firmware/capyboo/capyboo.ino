@@ -27,6 +27,8 @@ int currentHour = 0;
 int currentMinute = 0;
 int currentSecond = 0;
 
+String mood = "idle";
+
 Mode currentMode = MODE_ANIMATION;  // Default mode
 
 
@@ -65,6 +67,12 @@ void setup() {
     // Play wakeup animation once at startup
     playWakeupAnimation();
     
+    // Initialize random seed for sequence selection
+    randomSeed(analogRead(0));
+    
+    // Select initial animation sequence based on mood
+    selectAnimationSequence();
+    
     // Display current mode
     displayCurrentMode();
 }
@@ -86,14 +94,204 @@ void displayCurrentMode() {
             modeText += "Clock";
             break;
     }
-    display_text(modeText.c_str());
-    delay(2000);
 }
 
 // Animation sequence state
 int animationIndex = 0;
 unsigned long lastAnimationTime = 0;
-const unsigned long ANIMATION_DELAY = 1000; // Delay between animations in ms
+const unsigned long ANIMATION_DELAY = 1000; // Default delay between animations in ms
+int currentSequenceIndex = -1; // Track which sequence we're currently playing
+
+// Animation function pointer type
+typedef void (*AnimationFunction)();
+
+// Animation entry with optional delay
+struct AnimationEntry {
+    AnimationFunction func;
+    unsigned long delayMs;  // Delay after this animation (0 = use default)
+};
+
+// Structure to hold a sequence with its length
+struct SequenceInfo {
+    AnimationEntry* sequence;
+    int length;
+};
+
+// Pointer to current animation sequence (can point to any sequence)
+AnimationEntry* currentAnimationSequence = nullptr;
+int currentAnimationSequenceLength = 0;
+
+// Helper macros to create animation entries
+#define ANIM_WITH_DELAY(func, delay) {func, delay}
+#define ANIM(func) {func, 0}  // Use default delay
+
+AnimationEntry idleAnimationSequence[] = {
+    ANIM_WITH_DELAY(playLookRightFromMiddleAnimation, 1000),      // 0 - 1 second delay
+    ANIM_WITH_DELAY(playLookMiddleFromRightAnimation, 2000),     // 1 - 1 second delay
+    ANIM_WITH_DELAY(playLookLeftFromMiddleAnimation, 1000),       // 2 - 1 second delay
+    ANIM_WITH_DELAY(playLookMiddleFromLeftAnimation, 2000),      // 3 - 1 second delay
+};
+
+AnimationEntry happyAnimationSequence[] = {
+    ANIM_WITH_DELAY(playIdleToHappyAnimation, 1000),             // 0 - 1 second delay
+    ANIM_WITH_DELAY(playHappyToIdleAnimation, 2000),             // 1 - 1 second delay
+};
+
+AnimationEntry EnjoyingAnimationSequence[] = {
+    ANIM_WITH_DELAY(playEnjoyStartAnimation, 1000),             // 0 - 1 second delay
+    ANIM(playEnjoyingAnimation),
+    ANIM(playEnjoyingAnimation),
+    ANIM(playEnjoyingAnimation),
+    ANIM(playEnjoyingAnimation),
+    ANIM(playEnjoyingAnimation),
+    ANIM(playEnjoyEndAnimation),             // 2 - 1 second delay
+    ANIM_WITH_DELAY(playEnjoyEndAnimation, 2000),             // 3 - 1 second delay
+};
+
+AnimationEntry AngryAnimationSequence[] = {
+    ANIM_WITH_DELAY(playIdleToAngryAnimation, 3000),             // 0 - 1 second delay
+    ANIM_WITH_DELAY(playAngryToIdleAnimation, 2000),             // 1 - 1 second delay
+};
+
+AnimationEntry SadAnimationSequence[] = {
+    ANIM_WITH_DELAY(playIdleToSadAnimation, 1000),             // 0 - 1 second delay
+    ANIM_WITH_DELAY(playSadToIdleAnimation, 2000),             // 1 - 1 second delay
+};
+
+AnimationEntry VerySadAnimationSequence[] = {
+    ANIM_WITH_DELAY(playIdleToSadAnimation, 1000),             // 0 - 1 second delay
+    ANIM(playTearAnimation),
+    ANIM(playTearAnimation),
+    ANIM(playTearAnimation),
+    ANIM(playTearAnimation),
+    ANIM(playTearAnimation),
+    ANIM(playTearAnimation),
+    ANIM_WITH_DELAY(playSadToIdleAnimation, 2000),   
+};
+
+AnimationEntry CryAnimationSequence[] = {
+    ANIM_WITH_DELAY(playIdleToSadAnimation, 1000),             // 0 - 1 second delay
+    ANIM_WITH_DELAY(playSadToCryAnimation, 2000),
+    ANIM(playCryingAnimation),
+    ANIM(playCryingAnimation),
+    ANIM(playCryingAnimation),
+    ANIM(playCryingAnimation),
+    ANIM(playCryingAnimation),
+    ANIM(playCryingAnimation),
+    ANIM(playCryingAnimation),
+    ANIM_WITH_DELAY(playCryToSadAnimation, 2000),
+    ANIM_WITH_DELAY(playSadToIdleAnimation, 2000),
+
+};
+
+
+AnimationEntry FunnyAnimationSequence[] = {
+    ANIM_WITH_DELAY(playNormalToFunnyEyesAnimation, 1000),
+    ANIM(playTongueOutAnimation),
+    ANIM(playTongueOutAnimation),
+    ANIM(playTongueOutAnimation),
+    ANIM(playTongueOutAnimation),
+    ANIM(playTongueOutAnimation),
+    ANIM_WITH_DELAY(playFunnyEyesToNormalAnimation, 2000),
+};
+
+AnimationEntry LoveAnimationSequence[] = {
+    ANIM_WITH_DELAY(playLoveStartAnimation, 1000),
+    ANIM(playLoveAnimation),
+    ANIM(playLoveAnimation),
+    ANIM(playLoveAnimation),
+    ANIM(playLoveAnimation),
+    ANIM_WITH_DELAY(playLoveEndAnimation, 2000),
+};
+
+AnimationEntry SleepAnimationSequence[] = {
+    ANIM_WITH_DELAY(playSleepStartAnimation, 1000),
+    ANIM(playSleepAnimation),
+    ANIM(playSleepAnimation),
+    ANIM(playSleepAnimation),
+    ANIM(playSleepAnimation),   
+    ANIM(playSleepAnimation),
+    ANIM(playSleepAnimation),
+    ANIM_WITH_DELAY(playSleepEndAnimation, 2000),
+};
+// Array of all available animation sequences (defined after all sequences)
+SequenceInfo allSequences[] = {
+    {idleAnimationSequence, sizeof(idleAnimationSequence) / sizeof(idleAnimationSequence[0])},
+    {happyAnimationSequence, sizeof(happyAnimationSequence) / sizeof(happyAnimationSequence[0])},
+    {EnjoyingAnimationSequence, sizeof(EnjoyingAnimationSequence) / sizeof(EnjoyingAnimationSequence[0])},
+    {AngryAnimationSequence, sizeof(AngryAnimationSequence) / sizeof(AngryAnimationSequence[0])},
+    {SadAnimationSequence, sizeof(SadAnimationSequence) / sizeof(SadAnimationSequence[0])},
+    {VerySadAnimationSequence, sizeof(VerySadAnimationSequence) / sizeof(VerySadAnimationSequence[0])},
+    {CryAnimationSequence, sizeof(CryAnimationSequence) / sizeof(CryAnimationSequence[0])},
+    {FunnyAnimationSequence, sizeof(FunnyAnimationSequence) / sizeof(FunnyAnimationSequence[0])},
+    {LoveAnimationSequence, sizeof(LoveAnimationSequence) / sizeof(LoveAnimationSequence[0])},
+    {SleepAnimationSequence, sizeof(SleepAnimationSequence) / sizeof(SleepAnimationSequence[0])},
+};
+
+const int TOTAL_SEQUENCES = sizeof(allSequences) / sizeof(allSequences[0]);
+
+// Function to select animation sequence based on mood, or random if mood not set
+void selectAnimationSequence() {
+    // Check mood and select corresponding sequence
+    if (mood == "idle") {
+        currentAnimationSequence = idleAnimationSequence;
+        currentAnimationSequenceLength = sizeof(idleAnimationSequence) / sizeof(idleAnimationSequence[0]);
+        currentSequenceIndex = 0;
+    } else if (mood == "happy") {
+        currentAnimationSequence = happyAnimationSequence;
+        currentAnimationSequenceLength = sizeof(happyAnimationSequence) / sizeof(happyAnimationSequence[0]);
+        currentSequenceIndex = 1;
+    } else if (mood == "enjoying") {
+        currentAnimationSequence = EnjoyingAnimationSequence;
+        currentAnimationSequenceLength = sizeof(EnjoyingAnimationSequence) / sizeof(EnjoyingAnimationSequence[0]);
+        currentSequenceIndex = 2;
+    } else if (mood == "angry") {
+        currentAnimationSequence = AngryAnimationSequence;
+        currentAnimationSequenceLength = sizeof(AngryAnimationSequence) / sizeof(AngryAnimationSequence[0]);
+        currentSequenceIndex = 3;
+    } else if (mood == "sad") {
+        currentAnimationSequence = SadAnimationSequence;
+        currentAnimationSequenceLength = sizeof(SadAnimationSequence) / sizeof(SadAnimationSequence[0]);
+        currentSequenceIndex = 4;
+    } else if (mood == "verysad") {
+        currentAnimationSequence = VerySadAnimationSequence;
+        currentAnimationSequenceLength = sizeof(VerySadAnimationSequence) / sizeof(VerySadAnimationSequence[0]);
+        currentSequenceIndex = 5;
+    } else if (mood == "cry") {
+        currentAnimationSequence = CryAnimationSequence;
+        currentAnimationSequenceLength = sizeof(CryAnimationSequence) / sizeof(CryAnimationSequence[0]);
+        currentSequenceIndex = 6;
+    } else if (mood == "funny") {
+        currentAnimationSequence = FunnyAnimationSequence;
+        currentAnimationSequenceLength = sizeof(FunnyAnimationSequence) / sizeof(FunnyAnimationSequence[0]);
+        currentSequenceIndex = 7;
+    } else if (mood == "love") {
+        currentAnimationSequence = LoveAnimationSequence;
+        currentAnimationSequenceLength = sizeof(LoveAnimationSequence) / sizeof(LoveAnimationSequence[0]);
+        currentSequenceIndex = 8;
+    } else if (mood == "sleep") {
+        currentAnimationSequence = SleepAnimationSequence;
+        currentAnimationSequenceLength = sizeof(SleepAnimationSequence) / sizeof(SleepAnimationSequence[0]);
+        currentSequenceIndex = 9;
+    }  else {
+        // No specific mood set - randomly select from all sequences
+        int randomIndex = random(0, TOTAL_SEQUENCES);
+        
+        // Make sure we don't pick the same sequence twice in a row
+        while (randomIndex == currentSequenceIndex && TOTAL_SEQUENCES > 1) {
+            randomIndex = random(0, TOTAL_SEQUENCES);
+        }
+        
+        currentSequenceIndex = randomIndex;
+        currentAnimationSequence = allSequences[currentSequenceIndex].sequence;
+        currentAnimationSequenceLength = allSequences[currentSequenceIndex].length;
+        
+        Serial.print("Selected random sequence: ");
+        Serial.println(currentSequenceIndex);
+    }
+    
+    animationIndex = 0; // Reset to start of new sequence
+}
 
 void loop() {
     // Handle BLE connection/disconnection (required for BLE communication)
@@ -107,8 +305,6 @@ void loop() {
         
         Serial.print("Received BLE command: ");
         Serial.println(command);
-        display_text(command.c_str());
-        delay(2000);
         // Handle mode switching commands
         if (lowerCommand.startsWith("mode:")) {
             String modeStr = lowerCommand.substring(5); // Get text after "mode:"
@@ -236,7 +432,17 @@ void loop() {
         else if (lowerCommand.startsWith("message:")) {
             message = lowerCommand.substring(8); // Get text after "message:"
             message.trim();
-        } else if (lowerCommand.startsWith("time:")) {
+        } else if (lowerCommand.startsWith("mood:")) {
+            String moodStr = lowerCommand.substring(5); // Get text after "mood:"
+            moodStr.trim();
+            moodStr.toLowerCase();
+            mood = moodStr;
+            bleSerialPrintln("Mood set to: " + mood);
+            // Immediately switch to the mood's animation sequence
+            if (currentMode == MODE_ANIMATION) {
+                selectAnimationSequence();
+            }
+        }  else if (lowerCommand.startsWith("time:")) {
             String clockCommand = lowerCommand.substring(5); // Get text after "time:"
             clockCommand.trim();
 
@@ -244,8 +450,6 @@ void loop() {
             // Use the setTimeFromString function from clock.h
             if (setTimeFromString(clockCommand)) {
                 bleSerialPrintln("Clock time set successfully");
-                display_text("Time set");
-                delay(2000);
             } else {
                 bleSerialPrintln("Invalid clock format. Use: clock:HH:MM:SS or clock:HH:MM:SS DD/MM/YYYY");
             }
@@ -273,184 +477,33 @@ void loop() {
     // Handle different modes
     switch (currentMode) {
         case MODE_ANIMATION: {
-            // playTickleStartAnimation();
-            // playTickleAnimation();
-            // playTickleAnimation();
-            // playTickleAnimation();
-            // playTickleAnimation();
-            // playTickleAnimation();
-            // playTickleAnimation();
-            // playTickleEndAnimation();
-            // Animation mode - play animation sequence
-            // playIdleToSadAnimation();
-            // playSadToCryAnimation();
-            // playCryingAnimation();
-            // playCryingAnimation();
-            // playCryingAnimation();
-            // playCryingAnimation();
-            // playCryingAnimation();
-            // playCryingAnimation();
-            // playCryingAnimation();
-            // playCryingAnimation();
-            // playCryingAnimation();
-            // playCryingAnimation();
-            // playCryingAnimation();
-            // playCryingAnimation();
-            // playCryingAnimation();
-            // playCryingAnimation();
-            // playCryingAnimation();
-            // playCryingAnimation();
-            // playCryToSadAnimation();
-            // playSadToIdleAnimation();
-            // playEnjoyStartAnimation();
-            // playEnjoyingAnimation();
-            // playEnjoyingAnimation();
-            // playEnjoyingAnimation();
-            // playEnjoyingAnimation();
-            // playEnjoyingAnimation();
-            // playEnjoyingAnimation();
-            // playEnjoyingAnimation();
-            // playEnjoyingAnimation();
-            // playEnjoyingAnimation();
-            // playEnjoyingAnimation();
-            // playEnjoyEndAnimation();
-            // playIdleToHappyAnimation();
-            // delay(2000);
-            // playHappyToIdleAnimation();
-            // delay(2000);
-            // playIdleToAngryAnimation();
-            // delay(2000);
-            // playAngryToIdleAnimation();
             unsigned long currentTime = millis();
 
-            if (currentTime - lastAnimationTime >= ANIMATION_DELAY) {
+            // If no sequence is selected or sequence is complete, select sequence based on mood (or random)
+            if (currentAnimationSequence == nullptr || animationIndex >= currentAnimationSequenceLength) {
+                selectAnimationSequence();
+            }
+            
+            // Calculate delay for current animation (use custom delay or default)
+            unsigned long requiredDelay = ANIMATION_DELAY;
+            if (currentAnimationSequence != nullptr && animationIndex < currentAnimationSequenceLength) {
+                if (currentAnimationSequence[animationIndex].delayMs > 0) {
+                    requiredDelay = currentAnimationSequence[animationIndex].delayMs;
+                }
+            }
+            
+            // Check if enough time has passed (non-blocking delay)
+            if (currentTime - lastAnimationTime >= requiredDelay) {
                 // Play next animation in sequence
-                switch (animationIndex) {
-                    case 0:
-                        playLookRightFromMiddleAnimation();
-                        break;
-                    case 1:
-                        playLookMiddleFromRightAnimation();
-                        break;
-                    case 2:
-                        playLookLeftFromMiddleAnimation();
-                        break;
-                    case 3:
-                        playLookMiddleFromLeftAnimation();
-                        break;
-                    case 4:
-                        playNormalToFunnyEyesAnimation();
-                        break;
-                    case 5:
-                    playTongueOutAnimation();
-                        break;
-                    case 6:
-                    playTongueOutAnimation();
-                        break;
-                    case 7:
-                    playTongueOutAnimation();
-                        break;
-                    case 8:
-                    playTongueOutAnimation();
-                        break;
-                    case 9:
-                    playTongueOutAnimation();
-                        break;
-                    case 10:
-                    playTongueOutAnimation();
-                        break;
-                    case 11:
-                    playTongueOutAnimation();
-                        break;
-                    case 12:
-                    playTongueOutAnimation();
-                        break;
-                    case 13:
-                    playTongueOutAnimation();
-                        break;
-                    case 14:
-                    playTongueOutAnimation();
-                        break;
-                    case 15:
-                    playTongueOutAnimation();
-                        break;
-                    case 16:
-                    playTongueOutAnimation();
-                        break;
-                    case 17:
-                        playTongueOutAnimation();
-                        break;
-                    case 18:
-                        playFunnyEyesToNormalAnimation();
-                        break;
-                    case 19:
-                        playIdleToSadAnimation();
-                        break;
-                    case 20:
-                        playTearAnimation();
-                        break;
-                    case 21:
-                        playTearAnimation();
-                        break;
-                    case 22:
-                        playTearAnimation();
-                        break;
-                    case 23:
-                        playTearAnimation();
-                        break;
-                    case 24:
-                        playSadToIdleAnimation();
-                        break;
-                    case 25: 
-                        playIdleToAngryAnimation();
-                        break;
-                    case 26:
-                        playAngryToIdleAnimation();
-                        break;
-                    case 27:
-                        playIdleToHappyAnimation();
-                        break;
-                    case 28:
-                        playHappyToIdleAnimation();
-                        break;
-                    case 29:
-                    playIdleToSadAnimation();
-                    break;
-                    case 30:
-                    playSadToCryAnimation();
-                    break;
-                    case 32:
-                    playCryingAnimation();
-                    break;
-                    case 33:
-                    playCryingAnimation();
-                    break;
-                    case 34:
-                    playCryingAnimation();
-                    break;
-                    case 35:
-                    playCryingAnimation();
-                    break;
-                    case 36:
-                    playCryingAnimation();
-                    break;
-                    case 37:
-                    playCryingAnimation();
-                    break;
-                    case 38:
-                    playCryToSadAnimation();
-                    break;
-                    case 39:
-                    playSadToIdleAnimation();
-                    break;
-                    default:
-                        animationIndex = -1; // Reset to start
-                        break;
+                if (currentAnimationSequence != nullptr && animationIndex < currentAnimationSequenceLength) {
+                    currentAnimationSequence[animationIndex].func(); // Call the animation function
                 }
                 
                 animationIndex++;
-                if (animationIndex > 39) {
-                    animationIndex = 0; // Loop back to start
+                // When sequence completes, select a new random sequence on next loop iteration
+                if (animationIndex >= currentAnimationSequenceLength) {
+                    // Sequence complete - will select new random sequence on next loop
+                    animationIndex = currentAnimationSequenceLength; // Set to length so condition above triggers
                 }
                 
                 lastAnimationTime = currentTime;

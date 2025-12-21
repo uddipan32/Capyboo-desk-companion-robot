@@ -210,52 +210,6 @@ String formatDate(ClockTime t) {
     return dateStr;
 }
 
-// Display clock on OLED
-void displayClock() {
-    ClockTime t = getCurrentTime();
-    
-    display.clearDisplay();
-    display.setTextColor(SH110X_WHITE);
-    
-    // Draw border
-    display.drawRect(0, 0, 128, 64, SH110X_WHITE);
-    display.drawLine(0, 20, 128, 20, SH110X_WHITE);
-    display.drawLine(0, 44, 128, 44, SH110X_WHITE);
-    
-    // Display time (large, centered)
-    String timeStr = formatTime(t, true);
-    display.setTextSize(2);
-    int16_t x1, y1;
-    uint16_t w, h;
-    display.getTextBounds(timeStr, 0, 0, &x1, &y1, &w, &h);
-    int16_t x = (128 - w) / 2;
-    display.setCursor(x, 4);
-    display.print(timeStr);
-    
-    // Display day of week (top left, small)
-    display.setTextSize(1);
-    display.setCursor(4, 2);
-    display.print(t.dayOfWeek);
-    
-    // Display date (bottom, centered)
-    String dateStr = formatDate(t);
-    display.getTextBounds(dateStr, 0, 0, &x1, &y1, &w, &h);
-    x = (128 - w) / 2;
-    display.setCursor(x, 48);
-    display.print(dateStr);
-    
-    display.display();
-}
-
-// Update clock (call this in loop)
-void updateClock() {
-    // Update display every second
-    static unsigned long lastDisplayUpdate = 0;
-    if (millis() - lastDisplayUpdate >= TIME_UPDATE_INTERVAL) {
-        displayClock();
-        lastDisplayUpdate = millis();
-    }
-}
 
 // Display compact clock (smaller format)
 void displayCompactClock() {
@@ -292,6 +246,16 @@ void displayCompactClock() {
     display.print(dateStr);
     
     display.display();
+}
+
+// Update clock (call this in loop)
+void updateClock() {
+    // Update display every second
+    static unsigned long lastDisplayUpdate = 0;
+    if (millis() - lastDisplayUpdate >= TIME_UPDATE_INTERVAL) {
+        displayCompactClock();
+        lastDisplayUpdate = millis();
+    }
 }
 
 // Initialize clock (optional, sets default time)

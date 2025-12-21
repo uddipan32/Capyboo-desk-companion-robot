@@ -461,3 +461,45 @@ void playTickleAnimation() {
 	   delay(2);
    }
 }
+
+void playLoveStartAnimation() {
+	for (int i = 0; i < love_start_bitmap_allArray_LEN; i++) {
+	   display_bitmap(love_start_bitmap_allArray[i]);
+	   delay(20);
+   }
+}
+
+void playLoveEndAnimation() {
+	for (int i = love_start_bitmap_allArray_LEN - 1; i >= 0; i--) {
+	   display_bitmap(love_start_bitmap_allArray[i]);
+	   delay(20);
+   }
+}
+
+void playLoveAnimation() {
+	for (int i = 0; i < love_bitmap_allArray_LEN; i++) {
+	   display_bitmap(love_bitmap_allArray[i]);
+	   delay(20);
+   }
+}
+
+void playSleepStartAnimation() {
+	for (int i = 0; i < sleep_start_bitmap_allArray_LEN; i++) {
+	   display_bitmap(sleep_start_bitmap_allArray[i]);
+	   delay(20);
+   }
+}
+
+void playSleepEndAnimation() {
+	for (int i = sleep_start_bitmap_allArray_LEN - 1; i >= 0; i--) {
+	   display_bitmap(sleep_start_bitmap_allArray[i]);
+	   delay(20);
+   }
+}
+
+void playSleepAnimation() {
+	for (int i = 0; i < sleep_bitmap_allArray_LEN; i++) {
+	   display_bitmap(sleep_bitmap_allArray[i]);
+	   delay(20);
+   }
+}

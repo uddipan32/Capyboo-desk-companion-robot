@@ -160,9 +160,17 @@ void drawGame() {
         // Game Over screen
         display.setTextColor(SH110X_WHITE);
         display.setTextSize(2);
-        display.setCursor(15, 15);
+        int16_t x1, y1;
+        uint16_t w, h;
+        
+        // Center "GAME"
+        display.getTextBounds("GAME", 0, 0, &x1, &y1, &w, &h);
+        display.setCursor((128 - w) / 2, 15);
         display.print("GAME");
-        display.setCursor(20, 35);
+        
+        // Center "OVER"
+        display.getTextBounds("OVER", 0, 0, &x1, &y1, &w, &h);
+        display.setCursor((128 - w) / 2, 35);
         display.print("OVER");
         
         display.setTextSize(1);
@@ -178,11 +186,22 @@ void drawGame() {
         // Start screen
         display.setTextColor(SH110X_WHITE);
         display.setTextSize(1);
-        display.setCursor(25, 20);
+        
+        // Center "DINO GAME"
+        int16_t x1, y1;
+        uint16_t w, h;
+        display.getTextBounds("DINO GAME", 0, 0, &x1, &y1, &w, &h);
+        display.setCursor((128 - w) / 2, 20);
         display.print("DINO GAME");
-        display.setCursor(15, 35);
+        
+        // Center "Touch to jump"
+        display.getTextBounds("Touch to jump", 0, 0, &x1, &y1, &w, &h);
+        display.setCursor((128 - w) / 2, 35);
         display.print("Touch to jump");
-        display.setCursor(20, 50);
+        
+        // Center "Touch to start"
+        display.getTextBounds("Touch to start", 0, 0, &x1, &y1, &w, &h);
+        display.setCursor((128 - w) / 2, 50);
         display.print("Touch to start");
         
     } else {
