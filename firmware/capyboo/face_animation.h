@@ -266,7 +266,7 @@ const unsigned char* cry_bitmap_allArray[8] = {
 
 
 void playSadToCryAnimation() {
-	for (int i = cry_bitmap_allArray_LEN - 1; i >= 0; i--) {
+	for (int i = 0; i < cry_bitmap_allArray_LEN; i++) {
 	   display_bitmap(cry_bitmap_allArray[i]);
 	   delay(20);
    }
@@ -378,49 +378,51 @@ void playHappyToIdleAnimation() {
 
 
 // Array of all bitmaps for convenience. (Total bytes used to store images in PROGMEM = 4160)
-const int enjoy_start_bitmap_allArray_LEN = 4;
-const unsigned char* enjoy_start_bitmap_allArray[4] = {
+const int enjoy_start_bitmap_allArray_LEN = 3;
+const unsigned char* enjoy_start_bitmap_allArray[3] = {
 	enjoy_start_bitmap_00,
 	enjoy_start_bitmap_01,
 	enjoy_start_bitmap_02,
-	enjoy_start_bitmap_03
 };
 
 
 void playEnjoyStartAnimation() {
 	for (int i = 0; i < enjoy_start_bitmap_allArray_LEN; i++) {
 	   display_bitmap(enjoy_start_bitmap_allArray[i]);
-	   delay(20);
+	   delay(40);
    }
 }
 
 void playEnjoyEndAnimation() {	
 	for (int i = enjoy_start_bitmap_allArray_LEN - 1; i >= 0; i--) {
 	   display_bitmap(enjoy_start_bitmap_allArray[i]);
-	   delay(20);
+	   delay(40);
    }
 }
 
 
 
 // Array of all bitmaps for convenience. (Total bytes used to store images in PROGMEM = 8320)
-const int enjoy_bitmap_allArray_LEN = 8;
-const unsigned char* enjoy_bitmap_allArray[8] = {
+const int enjoy_bitmap_allArray_LEN = 7;
+const unsigned char* enjoy_bitmap_allArray[7] = {
+	enjoy_start_bitmap_03,
 	enjoy_bitmap_04,
 	enjoy_bitmap_05,
 	enjoy_bitmap_06,
 	enjoy_bitmap_07,
 	enjoy_bitmap_08,
 	enjoy_bitmap_09,
-	enjoy_bitmap_10,
-	enjoy_bitmap_11
 };
 
 
 void playEnjoyingAnimation() {
 	for (int i = 0; i < enjoy_bitmap_allArray_LEN; i++) {
 	   display_bitmap(enjoy_bitmap_allArray[i]);
-	   delay(20);
+	   delay(40);
+   }
+   for (int i = enjoy_bitmap_allArray_LEN - 1; i >= 0; i--) {
+	   display_bitmap(enjoy_bitmap_allArray[i]);
+	   delay(40);
    }
 }
 
@@ -479,27 +481,52 @@ void playLoveEndAnimation() {
 void playLoveAnimation() {
 	for (int i = 0; i < love_bitmap_allArray_LEN; i++) {
 	   display_bitmap(love_bitmap_allArray[i]);
-	   delay(20);
+	   delay(40);
+   }
+   for (int i = love_bitmap_allArray_LEN - 1; i >= 0; i--) {
+	   display_bitmap(love_bitmap_allArray[i]);
+	   delay(40);
    }
 }
 
 void playSleepStartAnimation() {
-	for (int i = 0; i < sleep_start_bitmap_allArray_LEN; i++) {
-	   display_bitmap(sleep_start_bitmap_allArray[i]);
+	for (int i = 0; i < sleepy_start_bitmap_allArray_LEN; i++) {
+	   display_bitmap(sleepy_start_bitmap_allArray[i]);
 	   delay(20);
    }
 }
 
 void playSleepEndAnimation() {
-	for (int i = sleep_start_bitmap_allArray_LEN - 1; i >= 0; i--) {
-	   display_bitmap(sleep_start_bitmap_allArray[i]);
+	for (int i = sleepy_start_bitmap_allArray_LEN - 1; i >= 0; i--) {
+	   display_bitmap(sleepy_start_bitmap_allArray[i]);
 	   delay(20);
    }
 }
 
 void playSleepAnimation() {
-	for (int i = 0; i < sleep_bitmap_allArray_LEN; i++) {
-	   display_bitmap(sleep_bitmap_allArray[i]);
+	for (int i = 0; i < sleepy_bitmap_allArray_LEN; i++) {
+	   display_bitmap(sleepy_bitmap_allArray[i]);
+	   delay(40);
+   }
+}
+
+void playThumbStartAnimation() {
+	for (int i = 0; i < thumb_start_bitmap_allArray_LEN; i++) {
+	   display_bitmap(thumb_start_bitmap_allArray[i]);
 	   delay(20);
+   }
+}
+
+void playThumbEndAnimation() {
+	for (int i = thumb_start_bitmap_allArray_LEN - 1; i >= 0; i--) {
+	   display_bitmap(thumb_start_bitmap_allArray[i]);
+	   delay(20);
+   }
+}
+
+void playThumbAnimation() {
+	for (int i = 0; i < thumb_bitmap_allArray_LEN; i++) {
+	   display_bitmap(thumb_bitmap_allArray[i]);
+	   delay(40);
    }
 }

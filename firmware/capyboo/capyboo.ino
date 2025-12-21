@@ -27,7 +27,7 @@ int currentHour = 0;
 int currentMinute = 0;
 int currentSecond = 0;
 
-String mood = "idle";
+String mood = "random";
 
 Mode currentMode = MODE_ANIMATION;  // Default mode
 
@@ -138,14 +138,13 @@ AnimationEntry happyAnimationSequence[] = {
 };
 
 AnimationEntry EnjoyingAnimationSequence[] = {
-    ANIM_WITH_DELAY(playEnjoyStartAnimation, 1000),             // 0 - 1 second delay
+    ANIM(playEnjoyStartAnimation),             // 0 - 1 second delay
     ANIM(playEnjoyingAnimation),
     ANIM(playEnjoyingAnimation),
     ANIM(playEnjoyingAnimation),
     ANIM(playEnjoyingAnimation),
     ANIM(playEnjoyingAnimation),
-    ANIM(playEnjoyEndAnimation),             // 2 - 1 second delay
-    ANIM_WITH_DELAY(playEnjoyEndAnimation, 2000),             // 3 - 1 second delay
+    ANIM(playEnjoyEndAnimation),             // 3 - 1 second delay
 };
 
 AnimationEntry AngryAnimationSequence[] = {
@@ -170,8 +169,8 @@ AnimationEntry VerySadAnimationSequence[] = {
 };
 
 AnimationEntry CryAnimationSequence[] = {
-    ANIM_WITH_DELAY(playIdleToSadAnimation, 1000),             // 0 - 1 second delay
-    ANIM_WITH_DELAY(playSadToCryAnimation, 2000),
+    ANIM_WITH_DELAY(playIdleToSadAnimation, 1000),
+    ANIM(playSadToCryAnimation),
     ANIM(playCryingAnimation),
     ANIM(playCryingAnimation),
     ANIM(playCryingAnimation),
@@ -179,11 +178,9 @@ AnimationEntry CryAnimationSequence[] = {
     ANIM(playCryingAnimation),
     ANIM(playCryingAnimation),
     ANIM(playCryingAnimation),
-    ANIM_WITH_DELAY(playCryToSadAnimation, 2000),
+    ANIM(playCryToSadAnimation),
     ANIM_WITH_DELAY(playSadToIdleAnimation, 2000),
-
 };
-
 
 AnimationEntry FunnyAnimationSequence[] = {
     ANIM_WITH_DELAY(playNormalToFunnyEyesAnimation, 1000),
@@ -197,35 +194,57 @@ AnimationEntry FunnyAnimationSequence[] = {
 
 AnimationEntry LoveAnimationSequence[] = {
     ANIM_WITH_DELAY(playLoveStartAnimation, 1000),
-    ANIM(playLoveAnimation),
-    ANIM(playLoveAnimation),
-    ANIM(playLoveAnimation),
-    ANIM(playLoveAnimation),
-    ANIM_WITH_DELAY(playLoveEndAnimation, 2000),
+    ANIM_WITH_DELAY(playLoveAnimation, 100),
+    ANIM_WITH_DELAY(playLoveAnimation, 100),
+    ANIM_WITH_DELAY(playLoveAnimation, 100),
+    ANIM_WITH_DELAY(playLoveAnimation, 100),
+    ANIM_WITH_DELAY(playLoveAnimation, 100),
+    ANIM_WITH_DELAY(playLoveEndAnimation, 1000),
 };
 
 AnimationEntry SleepAnimationSequence[] = {
     ANIM_WITH_DELAY(playSleepStartAnimation, 1000),
-    ANIM(playSleepAnimation),
-    ANIM(playSleepAnimation),
-    ANIM(playSleepAnimation),
-    ANIM(playSleepAnimation),   
-    ANIM(playSleepAnimation),
-    ANIM(playSleepAnimation),
+    ANIM_WITH_DELAY(playSleepAnimation, 100),
+    ANIM_WITH_DELAY(playSleepAnimation, 100),
+    ANIM_WITH_DELAY(playSleepAnimation, 100),
+    ANIM_WITH_DELAY(playSleepAnimation, 100),
+    ANIM_WITH_DELAY(playSleepAnimation, 100),
+    ANIM_WITH_DELAY(playSleepAnimation, 100),
+    ANIM_WITH_DELAY(playSleepAnimation, 100),
     ANIM_WITH_DELAY(playSleepEndAnimation, 2000),
 };
+
+AnimationEntry ThumbAnimationSequence[] = { 
+    ANIM(playThumbStartAnimation),
+    ANIM(playThumbAnimation),
+    ANIM(playThumbAnimation),
+    ANIM(playThumbAnimation),
+    ANIM(playThumbAnimation),
+    ANIM(playThumbEndAnimation),
+};
+
 // Array of all available animation sequences (defined after all sequences)
 SequenceInfo allSequences[] = {
+    {idleAnimationSequence, sizeof(idleAnimationSequence) / sizeof(idleAnimationSequence[0])},
+    {idleAnimationSequence, sizeof(idleAnimationSequence) / sizeof(idleAnimationSequence[0])},
     {idleAnimationSequence, sizeof(idleAnimationSequence) / sizeof(idleAnimationSequence[0])},
     {happyAnimationSequence, sizeof(happyAnimationSequence) / sizeof(happyAnimationSequence[0])},
     {EnjoyingAnimationSequence, sizeof(EnjoyingAnimationSequence) / sizeof(EnjoyingAnimationSequence[0])},
     {AngryAnimationSequence, sizeof(AngryAnimationSequence) / sizeof(AngryAnimationSequence[0])},
+    {idleAnimationSequence, sizeof(idleAnimationSequence) / sizeof(idleAnimationSequence[0])},
+    {idleAnimationSequence, sizeof(idleAnimationSequence) / sizeof(idleAnimationSequence[0])},
     {SadAnimationSequence, sizeof(SadAnimationSequence) / sizeof(SadAnimationSequence[0])},
     {VerySadAnimationSequence, sizeof(VerySadAnimationSequence) / sizeof(VerySadAnimationSequence[0])},
     {CryAnimationSequence, sizeof(CryAnimationSequence) / sizeof(CryAnimationSequence[0])},
     {FunnyAnimationSequence, sizeof(FunnyAnimationSequence) / sizeof(FunnyAnimationSequence[0])},
+    {EnjoyingAnimationSequence, sizeof(EnjoyingAnimationSequence) / sizeof(EnjoyingAnimationSequence[0])},
+    {EnjoyingAnimationSequence, sizeof(EnjoyingAnimationSequence) / sizeof(EnjoyingAnimationSequence[0])},
+    {EnjoyingAnimationSequence, sizeof(EnjoyingAnimationSequence) / sizeof(EnjoyingAnimationSequence[0])},
+    {EnjoyingAnimationSequence, sizeof(EnjoyingAnimationSequence) / sizeof(EnjoyingAnimationSequence[0])},
+    {EnjoyingAnimationSequence, sizeof(EnjoyingAnimationSequence) / sizeof(EnjoyingAnimationSequence[0])},
     {LoveAnimationSequence, sizeof(LoveAnimationSequence) / sizeof(LoveAnimationSequence[0])},
     {SleepAnimationSequence, sizeof(SleepAnimationSequence) / sizeof(SleepAnimationSequence[0])},
+    {ThumbAnimationSequence, sizeof(ThumbAnimationSequence) / sizeof(ThumbAnimationSequence[0])},
 };
 
 const int TOTAL_SEQUENCES = sizeof(allSequences) / sizeof(allSequences[0]);
@@ -273,6 +292,10 @@ void selectAnimationSequence() {
         currentAnimationSequence = SleepAnimationSequence;
         currentAnimationSequenceLength = sizeof(SleepAnimationSequence) / sizeof(SleepAnimationSequence[0]);
         currentSequenceIndex = 9;
+    } else if (mood == "thumbup") {
+        currentAnimationSequence = ThumbAnimationSequence;
+        currentAnimationSequenceLength = sizeof(ThumbAnimationSequence) / sizeof(ThumbAnimationSequence[0]);
+        currentSequenceIndex = 10;
     }  else {
         // No specific mood set - randomly select from all sequences
         int randomIndex = random(0, TOTAL_SEQUENCES);
@@ -470,7 +493,6 @@ void loop() {
 
     if (message.length() > 0) {
         display_text(message.c_str());
-        delay(500);
         return;
     }
 

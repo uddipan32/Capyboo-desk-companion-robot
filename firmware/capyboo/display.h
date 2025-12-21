@@ -36,33 +36,66 @@ void display_text(const char* text) {
         display.setCursor(x, y);
         display.println(text);
     } else {
-        // Text is too long - wrap to multiple lines
+        // Text is too long - wrap to multiple lines with word boundary awareness
         int line = 0;
         int pos = 0;
+        bool textTruncated = false;
         
         while (pos < textLen && line < maxLines) {
-            int endPos = pos + charsPerLine;
-            if (endPos > textLen) {
-                endPos = textLen;
+            int remainingChars = textLen - pos;
+            int lineEndPos;
+            
+            if (remainingChars <= charsPerLine) {
+                // Remaining text fits on one line
+                lineEndPos = textLen;
+            } else {
+                // Find the best break point (prefer space, but break at char limit if needed)
+                lineEndPos = pos + charsPerLine;
+                
+                // Look for a space before the character limit (prefer word boundary)
+                int spacePos = textStr.lastIndexOf(' ', lineEndPos);
+                if (spacePos > pos) {
+                    // Found a space - break there
+                    lineEndPos = spacePos;
+                }
+                // If no space found or word is too long, break at character limit
             }
             
-            // Extract line
-            String lineText = textStr.substring(pos, endPos);
+            // Check if this is the last line and text will be truncated
+            if (line == maxLines - 1 && lineEndPos < textLen) {
+                // Last line - make room for ellipsis
+                if (lineEndPos - pos > charsPerLine - 3) {
+                    lineEndPos = pos + charsPerLine - 3;
+                }
+                textTruncated = true;
+            }
+            
+            // Extract line text
+            String lineText = textStr.substring(pos, lineEndPos);
             
             // Display line (left-aligned for multi-line)
             display.setCursor(0, line * 8);  // 8 pixels per line at size 1
-            display.println(lineText);
+            display.print(lineText);
             
-            pos = endPos;
+            // Add ellipsis if text was truncated
+            if (textTruncated && line == maxLines - 1) {
+                display.print("...");
+            } else {
+                display.println(); // Move to next line
+            }
+            
+            // Move to next position (skip space if we broke at a word boundary)
+            pos = lineEndPos;
+            if (pos < textLen && textStr.charAt(pos) == ' ') {
+                pos++; // Skip the space at the start of next line
+            }
+            
             line++;
-        }
-        
-        // If text was truncated, show ellipsis on last line
-        if (pos < textLen && line >= maxLines) {
-            display.setCursor(0, (maxLines - 1) * 8);
-            String lastLine = textStr.substring((maxLines - 1) * charsPerLine, (maxLines - 1) * charsPerLine + charsPerLine - 3);
-            display.print(lastLine);
-            display.print("...");
+            
+            // Stop if we've displayed all text or reached max lines
+            if (pos >= textLen || line >= maxLines) {
+                break;
+            }
         }
     }
     
