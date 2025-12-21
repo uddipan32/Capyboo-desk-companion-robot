@@ -1,14 +1,11 @@
 #include "bluetooth.h"
 #include "display.h"
-#include "wifi.h"
-#include "wifi_storage.h"
-#include "mqtt.h"
 #include <Wire.h>
 
 #include "face_animation.h"
 #include "weather.h"
 #include "dino_game.h"
-#include "secrets.h"  // MQTT credentials (WiFi now stored in EEPROM)
+#include "clock.h"
 
 // Touch sensor pin (from definitions.h)
 const int TOUCH_SENSOR_PIN = 4;
@@ -17,17 +14,25 @@ const int TOUCH_SENSOR_PIN = 4;
 enum Mode {
     MODE_ANIMATION,
     MODE_WEATHER,
-    MODE_GAME
+    MODE_GAME,
+    MODE_CLOCK
 };
+String message = "";
+String currentCity = "";
+float currentTemperature = 0;
+float currentFeelsLike = 0;
+int currentHumidity = 0;
+String currentDescription = "";
+int currentHour = 0;
+int currentMinute = 0;
+int currentSecond = 0;
 
 Mode currentMode = MODE_ANIMATION;  // Default mode
 
 
 void setup() {
     Serial.begin(115200);
-    
-    // Initialize WiFi storage
-    initWiFiStorage();
+
     
     // Initialize BLE Serial
     initBLESerial("Capyboo");
@@ -56,54 +61,6 @@ void setup() {
     display.println("Capyboo");
     display.display();
     delay(2000);
-
-    // Try to connect to WiFi using stored credentials
-    char storedSSID[64] = "";
-    char storedPassword[64] = "";
-    bool wifiConnected = false;
-    
-    if (loadWiFiCredentials(storedSSID, storedPassword, 64)) {
-        Serial.println("Found stored WiFi credentials");
-        display_text("Connecting...");
-        wifiConnected = connectWifi(storedSSID, storedPassword);
-    } else {
-        // Try using secrets.h as fallback (for first-time setup)
-        // Serial.println("No stored WiFi credentials, trying secrets.h");
-        // if (strlen(WIFI_SSID) > 0) {
-        //     display_text("Connecting...");
-        //     wifiConnected = connectWifi(WIFI_SSID, WIFI_PASSWORD);
-        //     // Save to storage if connection successful
-        //     if (wifiConnected) {
-        //         saveWiFiCredentials(WIFI_SSID, WIFI_PASSWORD);
-        //     }
-        // }
-    }
-    
-    if (wifiConnected) {
-        Serial.println("Connected to WiFi");
-        String wifiMsg = "WiFi: " + String(storedSSID[0] != '\0' ? storedSSID : WIFI_SSID);
-        display_text(wifiMsg.c_str());
-        delay(2000);
-    } else {
-        Serial.println("WiFi not connected");
-        display_text("WiFi: Not connected\nUse BLE to setup");
-        delay(2000);
-    }
-
-    // Initialize MQTT
-    if (initMQTT()) {
-        if (connectMQTT()) {
-            Serial.println("MQTT connected successfully");
-            display_text("MQTT connected");
-            delay(2000);
-            publishStatus("Capyboo started and connected");
-            
-        } else {
-            Serial.println("Failed to connect to MQTT broker");
-            display_text("MQTT failed");
-            delay(2000);
-        }
-    }
     
     // Play wakeup animation once at startup
     playWakeupAnimation();
@@ -125,6 +82,9 @@ void displayCurrentMode() {
         case MODE_GAME:
             modeText += "Game";
             break;
+        case MODE_CLOCK:
+            modeText += "Clock";
+            break;
     }
     display_text(modeText.c_str());
     delay(2000);
@@ -133,7 +93,7 @@ void displayCurrentMode() {
 // Animation sequence state
 int animationIndex = 0;
 unsigned long lastAnimationTime = 0;
-const unsigned long ANIMATION_DELAY = 0; // Delay between animations in ms
+const unsigned long ANIMATION_DELAY = 1000; // Delay between animations in ms
 
 void loop() {
     // Handle BLE connection/disconnection (required for BLE communication)
@@ -149,59 +109,8 @@ void loop() {
         Serial.println(command);
         display_text(command.c_str());
         delay(2000);
-        
-        // Handle WiFi setup command: "wifi:SSID:password"
-        if (lowerCommand.startsWith("wifi:")) {
-            int firstColon = command.indexOf(':');
-            int secondColon = command.indexOf(':', firstColon + 1);
-            
-            if (secondColon > 0) {
-                String ssid = command.substring(firstColon + 1, secondColon);
-                String password = command.substring(secondColon + 1);
-                
-                Serial.print("Setting WiFi: SSID=");
-                Serial.print(ssid);
-                Serial.println(" (password hidden)");
-                
-                display_text("Setting WiFi...");
-                delay(1000);
-                
-                // Save credentials
-                if (saveWiFiCredentials(ssid.c_str(), password.c_str())) {
-                    // Try to connect
-                    if (connectWifi(ssid.c_str(), password.c_str())) {
-                        display_text("WiFi connected!");
-                        bleSerialPrintln("WiFi connected successfully!");
-                        delay(2000);
-                        
-                        // Reconnect MQTT if WiFi is now available
-                        if (initMQTT()) {
-                            connectMQTT();
-                        }
-                    } else {
-                        display_text("WiFi failed!");
-                        bleSerialPrintln("WiFi connection failed. Credentials saved.");
-                        delay(2000);
-                    }
-                } else {
-                    display_text("Save failed!");
-                    bleSerialPrintln("Failed to save WiFi credentials");
-                    delay(2000);
-                }
-            } else {
-                bleSerialPrintln("Invalid format. Use: wifi:SSID:password");
-            }
-        }
-        // Handle clear WiFi command
-        else if (lowerCommand == "clearwifi" || lowerCommand == "wificlear") {
-            clearWiFiCredentials();
-            disconnectWifi();
-            display_text("WiFi cleared");
-            bleSerialPrintln("WiFi credentials cleared");
-            delay(2000);
-        }
         // Handle mode switching commands
-        else if (lowerCommand.startsWith("mode:")) {
+        if (lowerCommand.startsWith("mode:")) {
             String modeStr = lowerCommand.substring(5); // Get text after "mode:"
             modeStr.trim();
             
@@ -217,95 +126,161 @@ void loop() {
                 currentMode = MODE_ANIMATION;
                 bleSerialPrintln("Switched to Animation mode");
                 displayCurrentMode();
+            } else if (modeStr == "clock") {
+                currentMode = MODE_CLOCK;
+                bleSerialPrintln("Switched to Clock mode");
+                displayCurrentMode();
             } else {
                 String errorMsg = "Unknown mode: " + modeStr;
                 display_text(errorMsg.c_str());
                 bleSerialPrintln("Unknown mode. Use: mode:animation, mode:weather, or mode:game");
                 delay(2000);
             }
+        } else if (lowerCommand.startsWith("weather:")) {
+            Serial.print("Weather command: ");
+            String weatherCommand = lowerCommand.substring(8); // Get text after "weather:"
+            weatherCommand.trim();
+            Serial.print("Parsing: ");
+            Serial.println(weatherCommand);
+            // command format: weather:city:temperature:feels_like:humidity:description
+            // Parse the colon-separated values
+            int pos = 0;
+            int nextPos = weatherCommand.indexOf(":", pos);
+            
+            // Parse city (required)
+            if (nextPos > 0) {
+                currentCity = weatherCommand.substring(pos, nextPos);
+                pos = nextPos + 1;
+                Serial.print("City: ");
+                Serial.println(currentCity);
+            } else if (nextPos == 0) {
+                // Colon at start - empty city
+                bleSerialPrintln("Invalid weather format: city cannot be empty");
+            } else {
+                // No colon found - city is the entire string
+                currentCity = weatherCommand;
+                pos = weatherCommand.length();
+                Serial.print("City (no more fields): ");
+                Serial.println(currentCity);
+            }
+            
+            // Parse temperature (required)
+            if (pos < weatherCommand.length()) {
+                nextPos = weatherCommand.indexOf(":", pos);
+                if (nextPos > pos) {
+                    currentTemperature = weatherCommand.substring(pos, nextPos).toFloat();
+                    pos = nextPos + 1;
+                    Serial.print("Temperature: ");
+                    Serial.println(currentTemperature);
+                } else if (nextPos == -1) {
+                    // No more colons - temperature is the rest
+                    currentTemperature = weatherCommand.substring(pos).toFloat();
+                    pos = weatherCommand.length();
+                    Serial.print("Temperature (last field): ");
+                    Serial.println(currentTemperature);
+                } else {
+                    bleSerialPrintln("Invalid weather format: missing temperature");
+                    pos = weatherCommand.length(); // Skip rest
+                }
+            }
+            
+            // Parse feels_like (required)
+            if (pos < weatherCommand.length()) {
+                nextPos = weatherCommand.indexOf(":", pos);
+                if (nextPos > pos) {
+                    currentFeelsLike = weatherCommand.substring(pos, nextPos).toFloat();
+                    pos = nextPos + 1;
+                    Serial.print("Feels like: ");
+                    Serial.println(currentFeelsLike);
+                } else if (nextPos == -1) {
+                    // No more colons - feels_like is the rest
+                    currentFeelsLike = weatherCommand.substring(pos).toFloat();
+                    pos = weatherCommand.length();
+                    Serial.print("Feels like (last field): ");
+                    Serial.println(currentFeelsLike);
+                } else {
+                    bleSerialPrintln("Invalid weather format: missing feels_like");
+                    pos = weatherCommand.length(); // Skip rest
+                }
+            }
+            
+            // Parse humidity (required, but description is optional)
+            if (pos < weatherCommand.length()) {
+                nextPos = weatherCommand.indexOf(":", pos);
+                if (nextPos > pos) {
+                    // Has description after humidity
+                    currentHumidity = weatherCommand.substring(pos, nextPos).toInt();
+                    pos = nextPos + 1;
+                    currentDescription = weatherCommand.substring(pos);
+                    Serial.print("Humidity: ");
+                    Serial.println(currentHumidity);
+                    Serial.print("Description: ");
+                    Serial.println(currentDescription);
+                } else if (nextPos == -1) {
+                    // No description - humidity is the rest
+                    currentHumidity = weatherCommand.substring(pos).toInt();
+                    currentDescription = "";
+                    Serial.print("Humidity (last field): ");
+                    Serial.println(currentHumidity);
+                } else {
+                    bleSerialPrintln("Invalid weather format: missing humidity");
+                }
+                
+                // Display the weather data
+                displayWeatherOnOLED(currentCity, currentTemperature, currentFeelsLike, currentHumidity, currentDescription);
+                bleSerialPrintln("Weather data updated");
+            } else {
+                bleSerialPrintln("Invalid weather format: missing humidity");
+            }
         }
-        // Handle other commands
-        else {
-            display_text(command.c_str());
-            delay(2000);
+        else if (lowerCommand.startsWith("message:")) {
+            message = lowerCommand.substring(8); // Get text after "message:"
+            message.trim();
+        } else if (lowerCommand.startsWith("time:")) {
+            String clockCommand = lowerCommand.substring(5); // Get text after "time:"
+            clockCommand.trim();
+
+            // command format: clock:HH:MM:SS or clock:HH:MM:SS DD/MM/YYYY
+            // Use the setTimeFromString function from clock.h
+            if (setTimeFromString(clockCommand)) {
+                bleSerialPrintln("Clock time set successfully");
+                display_text("Time set");
+                delay(2000);
+            } else {
+                bleSerialPrintln("Invalid clock format. Use: clock:HH:MM:SS or clock:HH:MM:SS DD/MM/YYYY");
+            }
         }
+
     }
 
-    // Handle MQTT connection and messages (must be called regularly)
-    handleMQTT();
-    
-    // Check for MQTT messages first (high priority)
-    if (mqttMessageAvailable()) {
-        String command = getMQTTMessage();
-        command.toLowerCase();
-        command.trim();
-        
-        Serial.print("Received MQTT command: ");
-        Serial.println(command);
+   
 
-        // Display the received command on screen immediately
-        display_text(command.c_str());
-        delay(2000);
-        
-        // Handle commands
-        if (command == "wakeup" || command == "start") {
-            playWakeupAnimation();
-            publishStatus("Wakeup animation played");
-        } else if (command == "lookright") {
-            playLookRightFromMiddleAnimation();
-            publishStatus("Looking right");
-        } else if (command == "lookleft") {
-            playLookLeftFromMiddleAnimation();
-            publishStatus("Looking left");
-        } else if (command == "tongue") {
-            playTongueOutAnimation();
-            publishStatus("Tongue out");
-        } else if (command == "funnyeyes") {
-            playNormalToFunnyEyesAnimation();
-            publishStatus("Funny eyes activated");
-        } else if (command.startsWith("mode:")) {
-            // Handle mode switching via MQTT
-            String modeStr = command.substring(5);
-            modeStr.trim();
-            if (modeStr == "weather") {
-                currentMode = MODE_WEATHER;
-                displayCurrentMode();
-                publishStatus("Switched to Weather mode");
-            } else if (modeStr == "game") {
-                currentMode = MODE_GAME;
-                displayCurrentMode();
-                publishStatus("Switched to Game mode");
-            } else if (modeStr == "animation") {
-                currentMode = MODE_ANIMATION;
-                displayCurrentMode();
-                publishStatus("Switched to Animation mode");
-            } else {
-                String errorMsg = "Unknown mode: " + modeStr;
-                display_text(errorMsg.c_str());
-                delay(2000);
-                publishStatus(errorMsg.c_str());
-            }
-        } else {
-            String errorMsg = "Unknown: " + command;
-            display_text(errorMsg.c_str());
-            delay(2000);
-            publishStatus(errorMsg.c_str());
-        }
-        // Reset animation timing after handling MQTT message
-        lastAnimationTime = millis();
+    // if touch sensor is pressed, play tickle animation
+    if (digitalRead(TOUCH_SENSOR_PIN) == HIGH && currentMode != MODE_GAME) {
+        playTickleStartAnimation();
+        playTickleAnimation();
+        playTickleAnimation();
+        playTickleEndAnimation();
+        message = "";
+    }
+
+    if (message.length() > 0) {
+        display_text(message.c_str());
+        delay(500);
+        return;
     }
 
     // Handle different modes
     switch (currentMode) {
         case MODE_ANIMATION: {
-            playTickleStartAnimation();
-            playTickleAnimation();
-            playTickleAnimation();
-            playTickleAnimation();
-            playTickleAnimation();
-            playTickleAnimation();
-            playTickleAnimation();
-            playTickleEndAnimation();
+            // playTickleStartAnimation();
+            // playTickleAnimation();
+            // playTickleAnimation();
+            // playTickleAnimation();
+            // playTickleAnimation();
+            // playTickleAnimation();
+            // playTickleAnimation();
+            // playTickleEndAnimation();
             // Animation mode - play animation sequence
             // playIdleToSadAnimation();
             // playSadToCryAnimation();
@@ -482,27 +457,9 @@ void loop() {
             }
             break;
         }
-            
         case MODE_WEATHER: {
             // Weather mode - fetch and display weather
-            static unsigned long lastWeatherUpdate = 0;
-            static unsigned long lastWeatherError = 0;
-            if (WiFi.status() == WL_CONNECTED) {
-                bleSerialPrint("get weather data");
-                
-                if (millis() - lastWeatherUpdate > 60000) { // Update every 60 seconds
-                    getWeatherData();
-                    lastWeatherUpdate = millis();
-                }
-            } else {
-                // Only show error message every 10 seconds to avoid blocking
-                if (millis() - lastWeatherError > 10000) {
-                    display_text("WiFi not connected\nCannot fetch weather");
-                    bleSerialPrint("get weather data failed");
-                    delay(2000);
-                    lastWeatherError = millis();
-                }
-            }
+            displayWeatherOnOLED(currentCity, currentTemperature, currentFeelsLike, currentHumidity, currentDescription);
             break;
         }
             
@@ -510,6 +467,12 @@ void loop() {
             // Game mode - run dino game
             bool touchPressed = digitalRead(TOUCH_SENSOR_PIN) == HIGH;
             runDinoGame(touchPressed);
+            break;
+        } 
+        case MODE_CLOCK: {
+            // Clock mode - display clock
+            updateClock();
+
             break;
         }
     }    

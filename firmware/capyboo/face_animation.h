@@ -443,21 +443,21 @@ void playTickleAnimation() {
 	// tickle left
 	for (int i = 0; i < tickle_left_bitmap_allArray_LEN; i++) {
 	   display_bitmap(tickle_left_bitmap_allArray[i]);
-	   delay(5);
+	   delay(2);
    }
    // tickle normal (reverse)
    for (int i = tickle_left_bitmap_allArray_LEN - 2; i >= 0; i--) {
 	   display_bitmap(tickle_left_bitmap_allArray[i]);
-	   delay(5);
+	   delay(2);
    }
    // tickle right
    for (int i = 0; i < tickle_right_bitmap_allArray_LEN; i++) {
 	   display_bitmap(tickle_right_bitmap_allArray[i]);
-	   delay(5);
+	   delay(2);
    }
    // tickle normal (reverse)
    for (int i = tickle_right_bitmap_allArray_LEN - 1; i >= 0; i--) {
 	   display_bitmap(tickle_right_bitmap_allArray[i]);
-	   delay(5);
+	   delay(2);
    }
 }

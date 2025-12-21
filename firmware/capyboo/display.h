@@ -1,3 +1,6 @@
+#ifndef DISPLAY_H
+#define DISPLAY_H
+
 #include <Adafruit_GFX.h>
 #include <Adafruit_SH110X.h>
 
@@ -65,3 +68,5 @@ void display_text(const char* text) {
     
     display.display();
 }
+
+#endif // DISPLAY_H
