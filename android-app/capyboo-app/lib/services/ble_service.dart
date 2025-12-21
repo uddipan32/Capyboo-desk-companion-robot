@@ -69,9 +69,10 @@ class BleService extends ChangeNotifier {
     }
   }
 
-  /// Scan for Capyboo devices (scan by name, not service UUID)
+  /// Scan for Capyboo devices and auto-connect when found
   Future<void> startScan({
-    Duration timeout = const Duration(seconds: 10),
+    Duration timeout = const Duration(seconds: 15),
+    bool autoConnect = true,
   }) async {
     try {
       _scannedDevices.clear();
@@ -80,8 +81,10 @@ class BleService extends ChangeNotifier {
       // Cancel any existing scan subscription
       await _scanSubscription?.cancel();
 
+      bool foundAndConnecting = false;
+
       // Listen for scan results
-      _scanSubscription = FlutterBluePlus.scanResults.listen((results) {
+      _scanSubscription = FlutterBluePlus.scanResults.listen((results) async {
         for (ScanResult result in results) {
           if (!_scannedDevices.any(
             (d) => d.remoteId == result.device.remoteId,
@@ -97,6 +100,21 @@ class BleService extends ChangeNotifier {
               debugPrint(">>> Found Capyboo! Adding to list");
               _scannedDevices.add(result.device);
               notifyListeners();
+
+              // Auto-connect to the first Capyboo found
+              if (autoConnect && !foundAndConnecting) {
+                foundAndConnecting = true;
+                debugPrint(">>> Auto-connecting to Capyboo...");
+
+                // Stop scanning before connecting
+                await FlutterBluePlus.stopScan();
+                await _scanSubscription?.cancel();
+                _scanSubscription = null;
+
+                // Connect to the device
+                await connect(result.device);
+                return;
+              }
             }
           }
         }
@@ -109,23 +127,26 @@ class BleService extends ChangeNotifier {
         androidUsesFineLocation: true,
       );
 
-      // Wait for scan to complete
+      // Wait for scan to complete (if not already connected)
       await Future.delayed(timeout);
 
       // Clean up scan subscription
       await _scanSubscription?.cancel();
       _scanSubscription = null;
 
-      if (_scannedDevices.isEmpty) {
-        _updateState(
-          BleConnectionState.disconnected,
-          "No Capyboo found. Make sure it's powered on.",
-        );
-      } else {
-        _updateState(
-          BleConnectionState.disconnected,
-          "Found ${_scannedDevices.length} device(s)",
-        );
+      // Only update state if we didn't auto-connect
+      if (!isConnected && _connectionState == BleConnectionState.scanning) {
+        if (_scannedDevices.isEmpty) {
+          _updateState(
+            BleConnectionState.disconnected,
+            "No Capyboo found. Make sure it's powered on.",
+          );
+        } else {
+          _updateState(
+            BleConnectionState.disconnected,
+            "Found ${_scannedDevices.length} device(s)",
+          );
+        }
       }
     } catch (e) {
       _updateState(BleConnectionState.error, "Scan error: $e");

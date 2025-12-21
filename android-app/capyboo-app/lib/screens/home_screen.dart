@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../services/ble_service.dart';
-import 'wifi_setup_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -11,9 +10,11 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
+  bool _isAnimating = false;
 
   @override
   void initState() {
@@ -21,12 +22,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
-    )..repeat(reverse: true);
-    
+    );
+
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.1).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
-    
+
     _initializeBle();
   }
 
@@ -36,13 +37,67 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     super.dispose();
   }
 
+  void _updateAnimation(bool shouldAnimate) {
+    if (shouldAnimate && !_isAnimating) {
+      _pulseController.repeat(reverse: true);
+      _isAnimating = true;
+    } else if (!shouldAnimate && _isAnimating) {
+      _pulseController.stop();
+      _pulseController.reset();
+      _isAnimating = false;
+    }
+  }
+
   Future<void> _initializeBle() async {
     // Request permissions
     await _requestPermissions();
-    
-    // Initialize BLE service
+
+    // Initialize BLE service and auto-connect
     final bleService = context.read<BleService>();
-    await bleService.initialize();
+    final initialized = await bleService.initialize();
+
+    // Auto-scan and connect on app start
+    if (initialized) {
+      await bleService.startScan(autoConnect: true);
+    }
+  }
+
+  Future<void> _sendTime(BleService bleService) async {
+    // get current time
+    final now = DateTime.now();
+    final hour = now.hour.toString().padLeft(2, '0');
+    final minute = now.minute.toString().padLeft(2, '0');
+    final second = now.second.toString().padLeft(2, '0');
+
+    final date = now.day.toString().padLeft(2, '0');
+    final month = now.month.toString().padLeft(2, '0');
+    final year = now.year.toString();
+
+    final timeCommand = 'time:$hour:$minute:$second $date/$month/$year';
+    final success = await bleService.sendCommand(timeCommand);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success ? '✓ Time sent' : '✗ Failed to send time'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _sendWeather(BleService bleService) async {
+    final weatherCmmand = 'weather:London:20:15:50';
+
+    // get current weather
+    final success = await bleService.sendCommand(weatherCmmand);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success ? '✓ Weather sent' : '✗ Failed to send weather',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _requestPermissions() async {
@@ -56,14 +111,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Future<void> _scanAndConnect() async {
     final bleService = context.read<BleService>();
-    
-    // Start scanning
-    await bleService.startScan(timeout: const Duration(seconds: 8));
-    
-    // Auto-connect if Capyboo found
-    if (bleService.scannedDevices.isNotEmpty) {
-      await bleService.connect(bleService.scannedDevices.first);
-    }
+
+    // Start scanning with auto-connect enabled
+    await bleService.startScan(autoConnect: true);
   }
 
   @override
@@ -76,36 +126,36 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             return CustomScrollView(
               slivers: [
                 // App Bar
-                SliverAppBar(
-                  expandedHeight: 120,
-                  floating: true,
-                  backgroundColor: Colors.transparent,
-                  flexibleSpace: FlexibleSpaceBar(
-                    title: const Text(
-                      'Capyboo',
-                      style: TextStyle(
-                        fontFamily: 'Georgia',
-                        fontWeight: FontWeight.bold,
-                        fontSize: 28,
-                        color: Color(0xFFF5E6D3),
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                    centerTitle: true,
-                    background: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            const Color(0xFF0F3460).withValues(alpha: 0.8),
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                // SliverAppBar(
+                //   expandedHeight: 120,
+                //   floating: true,
+                //   backgroundColor: Colors.transparent,
+                //   flexibleSpace: FlexibleSpaceBar(
+                //     title: const Text(
+                //       'Capyboo',
+                //       style: TextStyle(
+                //         fontFamily: 'Georgia',
+                //         fontWeight: FontWeight.bold,
+                //         fontSize: 28,
+                //         color: Color(0xFFF5E6D3),
+                //         letterSpacing: 1.5,
+                //       ),
+                //     ),
+                //     centerTitle: true,
+                //     background: Container(
+                //       decoration: BoxDecoration(
+                //         gradient: LinearGradient(
+                //           begin: Alignment.topCenter,
+                //           end: Alignment.bottomCenter,
+                //           colors: [
+                //             const Color(0xFF0F3460).withValues(alpha: 0.8),
+                //             Colors.transparent,
+                //           ],
+                //         ),
+                //       ),
+                //     ),
+                //   ),
+                // ),
 
                 // Content
                 SliverToBoxAdapter(
@@ -115,17 +165,17 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       children: [
                         // Connection Status Card
                         _buildConnectionCard(bleService),
-                        
+
                         const SizedBox(height: 24),
-                        
+
                         // Action Buttons
                         _buildActionButtons(bleService),
-                        
+
                         const SizedBox(height: 24),
-                        
-                        // Quick Commands (when connected)
+
+                        // Mode Selection (when connected)
                         if (bleService.isConnected)
-                          _buildQuickCommands(bleService),
+                          _buildModeSelection(bleService),
                       ],
                     ),
                   ),
@@ -140,14 +190,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Widget _buildConnectionCard(BleService bleService) {
     final isConnected = bleService.isConnected;
-    final isScanning = bleService.connectionState == BleConnectionState.scanning;
-    final isConnecting = bleService.connectionState == BleConnectionState.connecting;
+    final isScanning =
+        bleService.connectionState == BleConnectionState.scanning;
+    final isConnecting =
+        bleService.connectionState == BleConnectionState.connecting;
+
+    // Only animate when scanning or connecting
+    final shouldAnimate = isScanning || isConnecting;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateAnimation(shouldAnimate);
+    });
 
     return AnimatedBuilder(
       animation: _pulseAnimation,
       builder: (context, child) {
         return Transform.scale(
-          scale: (isScanning || isConnecting) ? _pulseAnimation.value : 1.0,
+          scale: shouldAnimate ? _pulseAnimation.value : 1.0,
           child: Container(
             padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
@@ -161,15 +219,21 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               borderRadius: BorderRadius.circular(28),
               boxShadow: [
                 BoxShadow(
-                  color: (isConnected ? const Color(0xFF4CAF50) : const Color(0xFFE94560))
-                      .withValues(alpha: 0.3),
+                  color:
+                      (isConnected
+                              ? const Color(0xFF4CAF50)
+                              : const Color(0xFFE94560))
+                          .withValues(alpha: 0.3),
                   blurRadius: 24,
                   offset: const Offset(0, 12),
                 ),
               ],
               border: Border.all(
-                color: (isConnected ? const Color(0xFF4CAF50) : const Color(0xFFE94560))
-                    .withValues(alpha: 0.3),
+                color:
+                    (isConnected
+                            ? const Color(0xFF4CAF50)
+                            : const Color(0xFFE94560))
+                        .withValues(alpha: 0.3),
                 width: 1.5,
               ),
             ),
@@ -190,10 +254,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: (isConnected
-                                ? const Color(0xFF4CAF50)
-                                : const Color(0xFFE94560))
-                            .withValues(alpha: 0.4),
+                        color:
+                            (isConnected
+                                    ? const Color(0xFF4CAF50)
+                                    : const Color(0xFFE94560))
+                                .withValues(alpha: 0.4),
                         blurRadius: 20,
                         spreadRadius: 2,
                       ),
@@ -214,10 +279,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   isConnected
                       ? 'Connected'
                       : isScanning
-                          ? 'Searching...'
-                          : isConnecting
-                              ? 'Connecting...'
-                              : 'Disconnected',
+                      ? 'Searching...'
+                      : isConnecting
+                      ? 'Connecting...'
+                      : 'Disconnected',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -268,174 +333,195 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Widget _buildActionButtons(BleService bleService) {
     final isConnected = bleService.isConnected;
-    final isBusy = bleService.connectionState == BleConnectionState.scanning ||
+    final isBusy =
+        bleService.connectionState == BleConnectionState.scanning ||
         bleService.connectionState == BleConnectionState.connecting;
 
-    return Column(
-      children: [
-        // Connect/Disconnect Button
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: isBusy
-                ? null
-                : isConnected
-                    ? () => bleService.disconnect()
-                    : _scanAndConnect,
-            icon: Icon(
-              isConnected ? Icons.bluetooth_disabled : Icons.bluetooth_searching,
-              size: 24,
-            ),
-            label: Text(
-              isConnected ? 'Disconnect' : 'Connect to Capyboo',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
-              ),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isConnected
-                  ? const Color(0xFFE94560)
-                  : const Color(0xFF00D9FF),
-              foregroundColor: isConnected ? Colors.white : const Color(0xFF1A1A2E),
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              elevation: 8,
-              shadowColor: (isConnected
-                      ? const Color(0xFFE94560)
-                      : const Color(0xFF00D9FF))
-                  .withValues(alpha: 0.4),
-            ),
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: isBusy
+            ? null
+            : isConnected
+            ? () => bleService.disconnect()
+            : _scanAndConnect,
+        icon: Icon(
+          isConnected ? Icons.bluetooth_disabled : Icons.bluetooth_searching,
+          size: 24,
+        ),
+        label: Text(
+          isConnected ? 'Disconnect' : 'Connect to Capyboo',
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
           ),
         ),
-
-        const SizedBox(height: 16),
-
-        // WiFi Setup Button
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const WifiSetupScreen(),
-                ),
-              );
-            },
-            icon: const Icon(Icons.wifi, size: 22),
-            label: const Text(
-              'WiFi Setup',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF00D9FF),
-              side: const BorderSide(color: Color(0xFF00D9FF), width: 2),
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isConnected
+              ? const Color(0xFFE94560)
+              : const Color(0xFF00D9FF),
+          foregroundColor: isConnected ? Colors.white : const Color(0xFF1A1A2E),
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
+          elevation: 8,
+          shadowColor:
+              (isConnected ? const Color(0xFFE94560) : const Color(0xFF00D9FF))
+                  .withValues(alpha: 0.4),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModeSelection(BleService bleService) {
+    final modes = [
+      {
+        'icon': Icons.animation,
+        'label': 'Animations',
+        'command': 'mode:animation',
+        'color': const Color(0xFFFF6B6B),
+        'gradient': [const Color(0xFFFF6B6B), const Color(0xFFFF8E53)],
+      },
+      {
+        'icon': Icons.sports_esports,
+        'label': 'Game',
+        'command': 'mode:game',
+        'color': const Color(0xFF4ECDC4),
+        'gradient': [const Color(0xFF4ECDC4), const Color(0xFF44A08D)],
+      },
+      {
+        'icon': Icons.cloud,
+        'label': 'Weather',
+        'command': 'mode:weather',
+        'color': const Color(0xFF667EEA),
+        'gradient': [const Color(0xFF667EEA), const Color(0xFF764BA2)],
+      },
+      {
+        'icon': Icons.access_time,
+        'label': 'Clock',
+        'command': 'mode:clock',
+        'color': const Color(0xFFFFD93D),
+        'gradient': [const Color(0xFFFFD93D), const Color(0xFFFF6B6B)],
+      },
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Row(
+          children: [
+            Icon(Icons.dashboard, color: Color(0xFFFFD700), size: 22),
+            SizedBox(width: 8),
+            Text(
+              'Modes',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFFF5E6D3),
+                fontFamily: 'Georgia',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 1.1,
+          ),
+          itemCount: modes.length,
+          itemBuilder: (context, index) {
+            final mode = modes[index];
+            return _buildModeCard(
+              icon: mode['icon'] as IconData,
+              label: mode['label'] as String,
+              command: mode['command'] as String,
+              gradient: mode['gradient'] as List<Color>,
+              bleService: bleService,
+            );
+          },
         ),
       ],
     );
   }
 
-  Widget _buildQuickCommands(BleService bleService) {
-    final commands = [
-      {'icon': Icons.wb_sunny, 'label': 'Wakeup', 'command': 'wakeup'},
-      {'icon': Icons.arrow_forward, 'label': 'Look Right', 'command': 'lookright'},
-      {'icon': Icons.arrow_back, 'label': 'Look Left', 'command': 'lookleft'},
-      {'icon': Icons.tag_faces, 'label': 'Funny Eyes', 'command': 'funnyeyes'},
-      {'icon': Icons.sentiment_very_satisfied, 'label': 'Tongue', 'command': 'tongue'},
-    ];
+  Widget _buildModeCard({
+    required IconData icon,
+    required String label,
+    required String command,
+    required List<Color> gradient,
+    required BleService bleService,
+  }) {
+    return GestureDetector(
+      onTap: () async {
+        if (command == 'mode:weather') {
+          await _sendWeather(bleService);
+        } else if (command == 'mode:clock') {
+          await _sendTime(bleService);
+        }
+        // delay
+        await Future.delayed(const Duration(seconds: 1));
+        final success = await bleService.sendCommand(command);
+        // delay for 1 second
+        await Future.delayed(const Duration(seconds: 1));
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFF16213E),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: const Color(0xFF00D9FF).withValues(alpha: 0.2),
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                success ? '✓ Mode: $label activated' : '✗ Failed to set mode',
+              ),
+              duration: const Duration(seconds: 1),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: success
+                  ? const Color(0xFF4CAF50)
+                  : const Color(0xFFE94560),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          );
+        }
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: gradient,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: gradient[0].withValues(alpha: 0.4),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(
-                Icons.flash_on,
-                color: Color(0xFFFFD700),
-                size: 22,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 48, color: Colors.white),
+            const SizedBox(height: 12),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                letterSpacing: 0.5,
               ),
-              SizedBox(width: 8),
-              Text(
-                'Quick Commands',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFFF5E6D3),
-                  fontFamily: 'Georgia',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: commands.map((cmd) {
-              return ActionChip(
-                avatar: Icon(
-                  cmd['icon'] as IconData,
-                  size: 18,
-                  color: const Color(0xFF00D9FF),
-                ),
-                label: Text(
-                  cmd['label'] as String,
-                  style: const TextStyle(
-                    color: Color(0xFFF5E6D3),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                backgroundColor: const Color(0xFF0F3460),
-                side: BorderSide.none,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                onPressed: () async {
-                  final success = await bleService.sendCommand(cmd['command'] as String);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          success
-                              ? '✓ Sent: ${cmd['label']}'
-                              : '✗ Failed to send command',
-                        ),
-                        duration: const Duration(seconds: 1),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    );
-                  }
-                },
-              );
-            }).toList(),
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
 }
-
