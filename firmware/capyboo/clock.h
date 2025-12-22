@@ -182,19 +182,35 @@ ClockTime getCurrentTime() {
     return clockTime;
 }
 
-// Format time as HH:MM:SS
+// Format time as HH:MM:SS (12-hour format with AM/PM)
 String formatTime(ClockTime t, bool includeSeconds = true) {
     String timeStr = "";
-    if (t.hour < 10) timeStr += "0";
-    timeStr += String(t.hour);
+    
+    // Convert 24-hour to 12-hour format
+    int hour12 = t.hour;
+    
+    if (hour12 == 0) {
+        hour12 = 12; // Midnight (00:xx) -> 12:xx AM
+    } else if (hour12 == 12) {
+    } else if (hour12 > 12) {
+        hour12 = hour12 - 12; // 13-23 -> 1-11 PM
+    }
+    
+    // Format hour (no leading zero for 12-hour format)
+    timeStr += String(hour12);
     timeStr += ":";
+    
+    // Format minute (with leading zero)
     if (t.minute < 10) timeStr += "0";
     timeStr += String(t.minute);
+    
+    // Add seconds if requested
     if (includeSeconds) {
         timeStr += ":";
         if (t.second < 10) timeStr += "0";
         timeStr += String(t.second);
     }
+    
     return timeStr;
 }
 

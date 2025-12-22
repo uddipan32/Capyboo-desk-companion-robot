@@ -530,3 +530,28 @@ void playThumbAnimation() {
 	   delay(40);
    }
 }
+
+void playWaveStartAnimation() {
+	for (int i = 0; i < wave_start_bitmap_allArray_LEN; i++) {
+	   display_bitmap(wave_start_bitmap_allArray[i]);
+	   delay(20);
+   }
+}
+
+void playWaveEndAnimation() {
+	for (int i = wave_start_bitmap_allArray_LEN - 1; i >= 0; i--) {
+	   display_bitmap(wave_start_bitmap_allArray[i]);
+	   delay(20);
+   }
+}
+
+void playWaveAnimation() {
+	for (int i = 0; i < wave_bitmap_allArray_LEN; i++) {
+	   display_bitmap(wave_bitmap_allArray[i]);
+	   delay(40);
+   }
+   for (int i = wave_bitmap_allArray_LEN - 1; i >= 0; i--) {
+	   display_bitmap(wave_bitmap_allArray[i]);
+	   delay(40);
+   }
+}

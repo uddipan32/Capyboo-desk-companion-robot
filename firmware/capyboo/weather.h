@@ -139,9 +139,9 @@ void displayWeatherOnOLED(String city, float temp, float feelsLike, int humidity
   
   // Degree symbol and unit
   display.setTextSize(1);
-  display.setCursor(65, 20);
+  display.setCursor(45, 20);
   display.print("o");
-  display.setCursor(70, 18);
+  display.setCursor(50, 18);
   display.setTextSize(2);
   display.print("C");
   

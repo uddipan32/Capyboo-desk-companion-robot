@@ -31,6 +31,12 @@ String mood = "random";
 
 Mode currentMode = MODE_ANIMATION;  // Default mode
 
+// Touch sensor long press detection
+unsigned long touchPressStartTime = 0;
+bool touchPressed = false;
+const unsigned long LONG_PRESS_DURATION = 1000; // 1 second for long press
+bool tickleAnimationPlaying = false;
+
 
 void setup() {
     Serial.begin(115200);
@@ -99,7 +105,7 @@ void displayCurrentMode() {
 // Animation sequence state
 int animationIndex = 0;
 unsigned long lastAnimationTime = 0;
-const unsigned long ANIMATION_DELAY = 1000; // Default delay between animations in ms
+const unsigned long ANIMATION_DELAY = 0; // Default delay between animations in ms
 int currentSequenceIndex = -1; // Track which sequence we're currently playing
 
 // Animation function pointer type
@@ -135,6 +141,26 @@ AnimationEntry idleAnimationSequence[] = {
 AnimationEntry happyAnimationSequence[] = {
     ANIM_WITH_DELAY(playIdleToHappyAnimation, 1000),             // 0 - 1 second delay
     ANIM_WITH_DELAY(playHappyToIdleAnimation, 2000),             // 1 - 1 second delay
+    ANIM(playEnjoyStartAnimation),             // 0 - 1 second delay
+    ANIM(playEnjoyingAnimation),
+    ANIM(playEnjoyingAnimation),
+    ANIM(playEnjoyingAnimation),
+    ANIM(playEnjoyingAnimation),
+    ANIM(playEnjoyingAnimation),
+    ANIM(playEnjoyEndAnimation),   
+    ANIM(playThumbStartAnimation),
+    ANIM(playThumbAnimation),
+    ANIM(playThumbAnimation),
+    ANIM(playThumbAnimation),
+    ANIM(playThumbAnimation),
+    ANIM(playThumbEndAnimation),
+    ANIM(playWaveStartAnimation),
+    ANIM(playWaveAnimation),
+    ANIM(playWaveAnimation),
+    ANIM(playWaveAnimation),
+    ANIM(playWaveAnimation),
+    ANIM(playWaveEndAnimation),
+
 };
 
 AnimationEntry EnjoyingAnimationSequence[] = {
@@ -223,6 +249,15 @@ AnimationEntry ThumbAnimationSequence[] = {
     ANIM(playThumbEndAnimation),
 };
 
+AnimationEntry WaveAnimationSequence[] = {
+    ANIM(playWaveStartAnimation),
+    ANIM(playWaveAnimation),
+    ANIM(playWaveAnimation),
+    ANIM(playWaveAnimation),
+    ANIM(playWaveAnimation),
+    ANIM(playWaveEndAnimation),
+};
+
 // Array of all available animation sequences (defined after all sequences)
 SequenceInfo allSequences[] = {
     {idleAnimationSequence, sizeof(idleAnimationSequence) / sizeof(idleAnimationSequence[0])},
@@ -245,6 +280,7 @@ SequenceInfo allSequences[] = {
     {LoveAnimationSequence, sizeof(LoveAnimationSequence) / sizeof(LoveAnimationSequence[0])},
     {SleepAnimationSequence, sizeof(SleepAnimationSequence) / sizeof(SleepAnimationSequence[0])},
     {ThumbAnimationSequence, sizeof(ThumbAnimationSequence) / sizeof(ThumbAnimationSequence[0])},
+    {WaveAnimationSequence, sizeof(WaveAnimationSequence) / sizeof(WaveAnimationSequence[0])},
 };
 
 const int TOTAL_SEQUENCES = sizeof(allSequences) / sizeof(allSequences[0]);
@@ -296,7 +332,11 @@ void selectAnimationSequence() {
         currentAnimationSequence = ThumbAnimationSequence;
         currentAnimationSequenceLength = sizeof(ThumbAnimationSequence) / sizeof(ThumbAnimationSequence[0]);
         currentSequenceIndex = 10;
-    }  else {
+    } else if (mood == "wave") {
+        currentAnimationSequence = WaveAnimationSequence;
+        currentAnimationSequenceLength = sizeof(WaveAnimationSequence) / sizeof(WaveAnimationSequence[0]);
+        currentSequenceIndex = 11;
+    } else {
         // No specific mood set - randomly select from all sequences
         int randomIndex = random(0, TOTAL_SEQUENCES);
         
@@ -482,13 +522,43 @@ void loop() {
 
    
 
-    // if touch sensor is pressed, play tickle animation
-    if (digitalRead(TOUCH_SENSOR_PIN) == HIGH && currentMode != MODE_GAME) {
-        playTickleStartAnimation();
-        playTickleAnimation();
-        playTickleAnimation();
-        playTickleEndAnimation();
-        message = "";
+    // Touch sensor handling with long press detection
+    if (currentMode != MODE_GAME) {
+        bool currentTouchState = (digitalRead(TOUCH_SENSOR_PIN) == HIGH);
+        unsigned long currentTime = millis();
+        
+        if (currentTouchState && !touchPressed) {
+            // Touch just pressed - record start time
+            touchPressStartTime = currentTime;
+            touchPressed = true;
+        } else if (currentTouchState && touchPressed) {
+            // Touch still pressed - check for long press
+            if (currentTime - touchPressStartTime >= LONG_PRESS_DURATION && !tickleAnimationPlaying) {
+                // Long press detected - set mood to "love"
+                mood = "love";
+                Serial.println("Long press detected - mood set to 'love'");
+                
+                // Trigger sequence selection to start love sequence
+                selectAnimationSequence();
+                message = "";
+                
+                // Reset touch state
+                touchPressed = false;
+            }
+        } else if (!currentTouchState && touchPressed) {
+            // Touch released - was it a short press?
+            if (currentTime - touchPressStartTime < LONG_PRESS_DURATION && !tickleAnimationPlaying) {
+                // Short press - just play tickle animation without changing mood
+                tickleAnimationPlaying = true;
+                playTickleStartAnimation();
+                playTickleAnimation();
+                playTickleAnimation();
+                playTickleEndAnimation();
+                tickleAnimationPlaying = false;
+                message = "";
+            }
+            touchPressed = false;
+        }
     }
 
     if (message.length() > 0) {
@@ -503,6 +573,11 @@ void loop() {
 
             // If no sequence is selected or sequence is complete, select sequence based on mood (or random)
             if (currentAnimationSequence == nullptr || animationIndex >= currentAnimationSequenceLength) {
+                // If love sequence just completed, reset mood to random
+                if (mood == "love") {
+                    mood = "random";
+                    Serial.println("Love sequence completed - mood reset to 'random'");
+                }
                 selectAnimationSequence();
             }
             
