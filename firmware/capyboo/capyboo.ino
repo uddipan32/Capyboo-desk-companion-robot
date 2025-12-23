@@ -9,6 +9,7 @@
 
 // Touch sensor pin (from definitions.h)
 const int TOUCH_SENSOR_PIN = 4;
+const int SPEAKER_PIN = 3;
 
 // Mode definitions
 enum Mode {
@@ -35,7 +36,17 @@ Mode currentMode = MODE_ANIMATION;  // Default mode
 unsigned long touchPressStartTime = 0;
 bool touchPressed = false;
 const unsigned long LONG_PRESS_DURATION = 1000; // 1 second for long press
+const unsigned long VERY_LONG_PRESS_DURATION = 2000; // 2 seconds for very long press
 bool tickleAnimationPlaying = false;
+bool veryLongPressTriggered = false; // Flag to prevent multiple triggers
+
+// Triple-tap detection
+unsigned long tapTimestamps[3] = {0, 0, 0};
+int tapCount = 0;
+const unsigned long TRIPLE_TAP_WINDOW = 3000; // 3 seconds window for triple tap
+unsigned long lastTapTime = 0;
+const unsigned long TAP_DEBOUNCE_DELAY = 300; // Wait 300ms before playing tickle to allow for rapid taps
+bool pendingTickleAnimation = false;
 
 
 void setup() {
@@ -47,6 +58,9 @@ void setup() {
 
     // Initialize touch sensor
     pinMode(TOUCH_SENSOR_PIN, INPUT);
+    
+    // Initialize speaker pin
+    pinMode(SPEAKER_PIN, OUTPUT);
 
     // Initialize display
     Wire.begin();
@@ -107,6 +121,87 @@ int animationIndex = 0;
 unsigned long lastAnimationTime = 0;
 const unsigned long ANIMATION_DELAY = 0; // Default delay between animations in ms
 int currentSequenceIndex = -1; // Track which sequence we're currently playing
+
+// Simple function to play sound using analogWrite
+void play_sound() {
+    // Speaker - using analog output (PWM)
+    analogWrite(SPEAKER_PIN, 128); // 50% duty cycle (0-255 range, or 0-4095 on ESP32)
+    delay(1000);
+    analogWrite(SPEAKER_PIN, 0); // Turn off
+}
+
+// Function to play a tone at specific frequency and duration
+void playTonePattern(int frequency, int duration) {
+    if (frequency == 0) {
+        analogWrite(SPEAKER_PIN, 0);
+        delay(duration);
+        return;
+    }
+    
+    // Calculate half period in microseconds based on frequency
+    // Frequency in Hz, so period = 1/frequency seconds = 1000000/frequency microseconds
+    unsigned long halfPeriod = 500000 / frequency; // Half period in microseconds
+    unsigned long startTime = millis();
+    int dutyCycle = 128; // 50% duty cycle
+    
+    while (millis() - startTime < duration) {
+        analogWrite(SPEAKER_PIN, dutyCycle); // ON
+        delayMicroseconds(halfPeriod);
+        analogWrite(SPEAKER_PIN, 0); // OFF
+        delayMicroseconds(halfPeriod);
+    }
+    analogWrite(SPEAKER_PIN, 0); // Turn off
+}
+
+// Play love you melody - a sweet, romantic melody
+void playLoveYouMelody() {
+    // Musical notes frequencies (in Hz)
+    // C4=262, D4=294, E4=330, F4=349, G4=392, A4=440, B4=494, C5=523, D5=587, E5=659, F5=698, G5=784, A5=880
+    // Melody: A simple, lovely ascending/descending pattern
+    // Pattern: C5-E5-G5-C6-G5-E5-C5 (I love you pattern)
+    int melodyNotes[] = {
+        523,  // C5 - "I"
+        659,  // E5 - "love"
+        784,  // G5 - "you"
+        1047, // C6 - high note
+        784,  // G5
+        659,  // E5
+        523,  // C5
+        659,  // E5 - repeat
+        784,  // G5
+        1047, // C6
+        784,  // G5
+        659,  // E5
+        523,  // C5 - final
+        0     // Rest
+    };
+    
+    int noteDurations[] = {
+        200,  // C5
+        200,  // E5
+        200,  // G5
+        400,  // C6 (longer)
+        200,  // G5
+        200,  // E5
+        300,  // C5 (medium)
+        200,  // E5
+        200,  // G5
+        400,  // C6 (longer)
+        200,  // G5
+        200,  // E5
+        500,  // C5 (final, longer)
+        100   // Rest
+    };
+    
+    int melodyLength = sizeof(melodyNotes) / sizeof(melodyNotes[0]);
+    
+    for (int i = 0; i < melodyLength; i++) {
+        playTonePattern(melodyNotes[i], noteDurations[i]);
+        delay(30); // Small pause between notes for clarity
+    }
+    
+    analogWrite(SPEAKER_PIN, 0); // Ensure speaker is off
+}
 
 // Animation function pointer type
 typedef void (*AnimationFunction)();
@@ -531,24 +626,124 @@ void loop() {
             // Touch just pressed - record start time
             touchPressStartTime = currentTime;
             touchPressed = true;
+            veryLongPressTriggered = false; // Reset flag on new press
         } else if (currentTouchState && touchPressed) {
-            // Touch still pressed - check for long press
-            if (currentTime - touchPressStartTime >= LONG_PRESS_DURATION && !tickleAnimationPlaying) {
-                // Long press detected - set mood to "love"
+            // Touch still pressed - check for very long press first, then long press
+            unsigned long pressDuration = currentTime - touchPressStartTime;
+            
+            if (pressDuration >= VERY_LONG_PRESS_DURATION && !tickleAnimationPlaying && !veryLongPressTriggered) {
+                // Very long press detected (2 seconds) - play love you animation
+                veryLongPressTriggered = true; // Set flag to prevent multiple triggers
+                Serial.println("Very long press detected (2s) - Playing love you animation");
+                
+                // Play love you animation with music
+                playLoveYouAnimation();
+                message = "";
+                
+                // Reset touch state
+                touchPressed = false;
+            } else if (pressDuration >= LONG_PRESS_DURATION && pressDuration < VERY_LONG_PRESS_DURATION && !tickleAnimationPlaying && !veryLongPressTriggered) {
+                // Long press detected (1 second) - set mood to "love"
                 mood = "love";
-                Serial.println("Long press detected - mood set to 'love'");
+                Serial.println("Long press detected (1s) - mood set to 'love'");
                 
                 // Trigger sequence selection to start love sequence
                 selectAnimationSequence();
                 message = "";
                 
-                // Reset touch state
-                touchPressed = false;
+                // Don't reset touch state yet - wait to see if it becomes very long press
             }
         } else if (!currentTouchState && touchPressed) {
-            // Touch released - was it a short press?
-            if (currentTime - touchPressStartTime < LONG_PRESS_DURATION && !tickleAnimationPlaying) {
-                // Short press - just play tickle animation without changing mood
+            // Touch released - check what type of press it was
+            unsigned long pressDuration = currentTime - touchPressStartTime;
+            
+            // Only handle short press if it wasn't a very long press
+            if (pressDuration < LONG_PRESS_DURATION && !tickleAnimationPlaying && !veryLongPressTriggered) {
+                // Short press detected - record this tap
+                lastTapTime = currentTime;
+                
+                // Clean up old taps outside the time window BEFORE adding new tap
+                while (tapCount > 0 && tapTimestamps[0] > 0 && (currentTime - tapTimestamps[0]) > TRIPLE_TAP_WINDOW) {
+                    // First tap is too old, shift array
+                    tapTimestamps[0] = tapTimestamps[1];
+                    tapTimestamps[1] = tapTimestamps[2];
+                    tapTimestamps[2] = 0;
+                    tapCount--;
+                }
+                
+                // Shift timestamps and add current tap
+                tapTimestamps[0] = tapTimestamps[1];
+                tapTimestamps[1] = tapTimestamps[2];
+                tapTimestamps[2] = currentTime;
+                tapCount++;
+                
+                // Keep only last 3 taps
+                if (tapCount > 3) {
+                    tapCount = 3;
+                }
+                
+                // Debug output
+                Serial.print("Tap #");
+                Serial.print(tapCount);
+                Serial.print(" detected at ");
+                Serial.print(currentTime);
+                if (tapCount >= 3 && tapTimestamps[0] > 0) {
+                    unsigned long timeSpan = tapTimestamps[2] - tapTimestamps[0];
+                    Serial.print(" | Time span: ");
+                    Serial.print(timeSpan);
+                    Serial.print("ms (window: ");
+                    Serial.print(TRIPLE_TAP_WINDOW);
+                    Serial.print("ms)");
+                }
+                Serial.println();
+                
+                // Check if we have exactly 3 taps within the time window
+                bool isTripleTap = (tapCount == 3 && tapTimestamps[0] > 0 && 
+                                   (tapTimestamps[2] - tapTimestamps[0]) <= TRIPLE_TAP_WINDOW);
+                
+                if (isTripleTap) {
+                    // Triple tap detected - cancel pending tickle and play love you animation
+                    Serial.println("*** TRIPLE TAP DETECTED - Playing love you animation ***");
+                    pendingTickleAnimation = false; // Cancel any pending tickle
+                    // Play animation (music is integrated in playLoveYouAnimation)
+                    playLoveYouAnimation(); // Play animation with music
+                    // Reset tap tracking
+                    tapCount = 0;
+                    tapTimestamps[0] = 0;
+                    tapTimestamps[1] = 0;
+                    tapTimestamps[2] = 0;
+                    message = "";
+                } else {
+                    // Not a triple tap yet - schedule tickle animation after debounce delay
+                    // But only if this is the first tap, or enough time has passed since last tap
+                    if (tapCount == 1 || (currentTime - tapTimestamps[1]) > 200) {
+                        pendingTickleAnimation = true;
+                    }
+                }
+            }
+            // Reset touch state and flags
+            touchPressed = false;
+            veryLongPressTriggered = false;
+        }
+        
+        // Check if we should play pending tickle animation (after debounce delay)
+        if (pendingTickleAnimation && !tickleAnimationPlaying && 
+            (millis() - lastTapTime) >= TAP_DEBOUNCE_DELAY) {
+            // Check one more time if triple tap was completed during the delay
+            unsigned long checkTime = millis();
+            if (tapCount == 3 && tapTimestamps[0] > 0 && 
+                (tapTimestamps[2] - tapTimestamps[0]) <= TRIPLE_TAP_WINDOW &&
+                (checkTime - tapTimestamps[2]) < TAP_DEBOUNCE_DELAY) {
+                // Triple tap was completed during delay - don't play tickle
+                Serial.println("Triple tap completed during delay - skipping tickle");
+                pendingTickleAnimation = false;
+                tapCount = 0;
+                tapTimestamps[0] = 0;
+                tapTimestamps[1] = 0;
+                tapTimestamps[2] = 0;
+            } else {
+                // No triple tap - play tickle animation
+                pendingTickleAnimation = false;
                 tickleAnimationPlaying = true;
                 playTickleStartAnimation();
                 playTickleAnimation();
@@ -556,8 +751,12 @@ void loop() {
                 playTickleEndAnimation();
                 tickleAnimationPlaying = false;
                 message = "";
+                // Reset tap tracking after playing tickle
+                tapCount = 0;
+                tapTimestamps[0] = 0;
+                tapTimestamps[1] = 0;
+                tapTimestamps[2] = 0;
             }
-            touchPressed = false;
         }
     }
 

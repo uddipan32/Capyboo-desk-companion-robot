@@ -555,3 +555,56 @@ void playWaveAnimation() {
 	   delay(40);
    }
 }
+
+// Forward declaration - defined in capyboo.ino
+extern const int SPEAKER_PIN;
+
+void playLoveYouAnimation() {
+	// Music pattern using play_sound() style - play during animation
+	// Pattern: play sound at intervals during animation frames
+	int melodyNotes[] = {
+		523, 659, 784, 1047, 784, 659, 523,  // C5 E5 G5 C6 G5 E5 C5
+		659, 784, 1047, 659, 523,            // E5 G5 C6 E5 C5
+		523, 659, 784, 1047, 784, 659, 523,  // Repeat
+		659, 784, 1047, 659, 523,             // E5 G5 C6 E5 C5
+		523, 659, 784, 1047, 784, 659, 523   // Final
+	};
+	int musicNoteDurations[] = {
+		80, 80, 100, 150, 100, 80, 120, 100, 80, 150, 120, 100
+	};
+	int patternIndex = 0;
+	int patternLength = sizeof(musicNoteDurations) / sizeof(musicNoteDurations[0]);
+	unsigned long lastMusicTime = 0;
+	unsigned long musicInterval = 180; // Play music note every 180ms
+	
+	for (int i = 0; i < love_you_bitmap_allArray_LEN; i++) {
+	   display_bitmap(love_you_bitmap_allArray[i]);
+	   
+	   // Play music synchronized with animation using play_sound() pattern
+	   unsigned long currentTime = millis();
+	   if (patternIndex < patternLength && (currentTime - lastMusicTime >= musicInterval || i == 0)) {
+	       // Play sound pattern - using analogWrite like play_sound()
+	       int noteDuration = musicNoteDurations[patternIndex];
+	       
+	       // Play tone by rapidly toggling analogWrite to create frequency
+	       unsigned long noteStartTime = millis();
+	       int cycles = 0;
+	       while (millis() - noteStartTime < noteDuration && cycles < 50) {
+	           analogWrite(SPEAKER_PIN, 128); // 50% duty cycle - ON
+	           delayMicroseconds(500); // Half period
+	           analogWrite(SPEAKER_PIN, 0); // OFF
+	           delayMicroseconds(500); // Half period
+	           cycles++;
+	       }
+	       analogWrite(SPEAKER_PIN, 0); // Ensure off
+	       
+	       lastMusicTime = currentTime;
+	       patternIndex++;
+	   }
+	   
+	   delay(60); // Animation frame delay
+   }
+   
+   // Stop any remaining sound
+   analogWrite(SPEAKER_PIN, 0);
+}
