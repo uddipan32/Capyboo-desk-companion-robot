@@ -14,3 +14,8 @@ Built as a fun blend of hardware + software, Capyboo focuses on personality, sim
 # Animations
 
 ![Look-right](firmware/animations/look-right.gif)
+![Love](firmware/animations/love.gif)
+![Sleepy](firmware/animations/sleepy.gif)
+![Thumbs-up](firmware/animations/thumbs-up.gif)
+![Tickle](firmware/animations/tickle.gif)
+![Wave](firmware/animations/wave.gif)
