@@ -2,7 +2,14 @@
 
 ## PubSubClient Library Installation
 
-### Method 1: Arduino IDE Library Manager (Recommended)
+### Method 1: esp32 Board
+
+1. Open Arduino IDE
+2. Go to File -> Preferences
+3. Additional board manager URLs: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+4. Board manager install esp32 by Espressif Systems
+
+### Method 2: Arduino IDE Library Manager (Recommended)
 
 1. Open Arduino IDE
 2. Go to **Tools → Manage Libraries...** (or press `Ctrl+Shift+I`)
@@ -11,7 +18,7 @@
 5. Click **Install**
 6. Wait for installation to complete
 
-### Method 2: Manual Installation
+### Method 3: Manual Installation
 
 If Library Manager doesn't work, you can install manually:
 
