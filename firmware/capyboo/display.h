@@ -2,21 +2,21 @@
 #define DISPLAY_H
 
 #include <Adafruit_GFX.h>
-#include <Adafruit_SH110X.h>
+#include <Adafruit_SSD1306.h>
 
 // Display object (shared across headers) - define it here
-Adafruit_SH1106G display(128,64,&Wire,-1);
+Adafruit_SSD1306 display(128,64,&Wire,-1);
 
 
 void display_bitmap(const unsigned char* frame) {
     display.clearDisplay();
-    display.drawBitmap(0, 0, frame, 128, 64, SH110X_WHITE);
+    display.drawBitmap(0, 0, frame, 128, 64, SSD1306_WHITE);
     display.display();
 }
 
 void display_text(const char* text) {
     display.clearDisplay();
-    display.setTextColor(SH110X_WHITE);
+    display.setTextColor(SSD1306_WHITE);
     display.setTextSize(1);
     
     // Calculate how many characters fit per line (128 pixels / ~6 pixels per char)
