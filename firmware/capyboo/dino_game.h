@@ -33,35 +33,35 @@ int gameSpeed = 5;               // Obstacle movement speed
 // Dino sprite (simple rectangle-based dino)
 void drawDino(int x, int y) {
     // Dino body
-    display.fillRect(x, y - DINO_SIZE, 8, DINO_SIZE, SH110X_WHITE);
+    display.fillRect(x, y - DINO_SIZE, 8, DINO_SIZE, SSD1306_WHITE);
     // Dino head
-    display.fillRect(x + 6, y - DINO_SIZE - 4, 4, 4, SH110X_WHITE);
+    display.fillRect(x + 6, y - DINO_SIZE - 4, 4, 4, SSD1306_WHITE);
     // Dino legs (alternating for animation)
     static bool legState = false;
     legState = !legState;
     if (legState) {
-        display.fillRect(x + 2, y, 2, 2, SH110X_WHITE);
-        display.fillRect(x + 6, y, 2, 2, SH110X_WHITE);
+        display.fillRect(x + 2, y, 2, 2, SSD1306_WHITE);
+        display.fillRect(x + 6, y, 2, 2, SSD1306_WHITE);
     } else {
-        display.fillRect(x + 1, y, 2, 2, SH110X_WHITE);
-        display.fillRect(x + 7, y, 2, 2, SH110X_WHITE);
+        display.fillRect(x + 1, y, 2, 2, SSD1306_WHITE);
+        display.fillRect(x + 7, y, 2, 2, SSD1306_WHITE);
     }
 }
 
 // Draw obstacle (cactus)
 void drawObstacle(int x, int y) {
     // Main body
-    display.fillRect(x, y - OBSTACLE_HEIGHT, OBSTACLE_WIDTH, OBSTACLE_HEIGHT, SH110X_WHITE);
+    display.fillRect(x, y - OBSTACLE_HEIGHT, OBSTACLE_WIDTH, OBSTACLE_HEIGHT, SSD1306_WHITE);
     // Top spike
-    display.fillRect(x + 2, y - OBSTACLE_HEIGHT - 4, 4, 4, SH110X_WHITE);
+    display.fillRect(x + 2, y - OBSTACLE_HEIGHT - 4, 4, 4, SSD1306_WHITE);
     // Side spikes
-    display.fillRect(x - 2, y - OBSTACLE_HEIGHT + 4, 2, 4, SH110X_WHITE);
-    display.fillRect(x + OBSTACLE_WIDTH, y - OBSTACLE_HEIGHT + 6, 2, 4, SH110X_WHITE);
+    display.fillRect(x - 2, y - OBSTACLE_HEIGHT + 4, 2, 4, SSD1306_WHITE);
+    display.fillRect(x + OBSTACLE_WIDTH, y - OBSTACLE_HEIGHT + 6, 2, 4, SSD1306_WHITE);
 }
 
 // Draw ground line
 void drawGround() {
-    display.drawLine(0, GROUND_Y + 2, 128, GROUND_Y + 2, SH110X_WHITE);
+    display.drawLine(0, GROUND_Y + 2, 128, GROUND_Y + 2, SSD1306_WHITE);
 }
 
 // Check collision between dino and obstacle
@@ -158,7 +158,7 @@ void drawGame() {
     
     if (gameOver) {
         // Game Over screen
-        display.setTextColor(SH110X_WHITE);
+        display.setTextColor(SSD1306_WHITE);
         display.setTextSize(2);
         int16_t x1, y1;
         uint16_t w, h;
@@ -184,7 +184,7 @@ void drawGame() {
         
     } else if (!gameRunning) {
         // Start screen
-        display.setTextColor(SH110X_WHITE);
+        display.setTextColor(SSD1306_WHITE);
         display.setTextSize(1);
         
         // Center "DINO GAME"
@@ -211,7 +211,7 @@ void drawGame() {
         drawObstacle(obstacleX, obstacleY);
         
         // Draw score
-        display.setTextColor(SH110X_WHITE);
+        display.setTextColor(SSD1306_WHITE);
         display.setTextSize(1);
         display.setCursor(90, 5);
         display.print("Score:");

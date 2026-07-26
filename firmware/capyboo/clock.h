@@ -232,7 +232,7 @@ void displayCompactClock() {
     ClockTime t = getCurrentTime();
     
     display.clearDisplay();
-    display.setTextColor(SH110X_WHITE);
+    display.setTextColor(SSD1306_WHITE);
     
     // Time (large)
     String timeStr = formatTime(t, false); // HH:MM without seconds

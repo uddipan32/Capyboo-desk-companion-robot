@@ -5,17 +5,17 @@
 
 #include "Arduino.h"
 #include <Adafruit_GFX.h>
-#include <Adafruit_SH110X.h>
+#include <Adafruit_SSD1306.h>
 
 #include <Wire.h> // library requires for IIC communication
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
-#define I2C_ADDRESS 0x3C  // I2C address for SH1106 (usually 0x3C or 0x3D)
+#define I2C_ADDRESS 0x3C  // I2C address for SSD1306 (usually 0x3C or 0x3D)
 
 // Initialize OLED display (extern - defined in main file)
-extern Adafruit_SH1106G display;
+extern Adafruit_SSD1306 display;
 
 // OpenWeatherMap API - GET YOUR FREE API KEY FROM https://openweathermap.org/api
 const String apiKey = WEATHER_API_KEY;
@@ -41,14 +41,14 @@ void getWeatherData() {
     
     // Show cool loading animation
     display.clearDisplay();
-    display.drawRect(0, 0, 128, 64, SH110X_WHITE);
+    display.drawRect(0, 0, 128, 64, SSD1306_WHITE);
     display.setTextSize(1);
     display.setCursor(25, 25);
     display.println("Fetching data");
     
     // Animated loading dots
     for (int i = 0; i < 3; i++) {
-        display.fillRect(75 + i * 8, 25, 4, 4, SH110X_WHITE);
+        display.fillRect(75 + i * 8, 25, 4, 4, SSD1306_WHITE);
     }
     display.display();
     
@@ -103,9 +103,9 @@ void getWeatherData() {
     
     // Show error with design
     display.clearDisplay();
-    display.drawRect(0, 0, 128, 64, SH110X_WHITE);
-    display.fillRect(54, 10, 20, 20, SH110X_WHITE);
-    display.fillRect(58, 14, 12, 12, SH110X_BLACK);
+    display.drawRect(0, 0, 128, 64, SSD1306_WHITE);
+    display.fillRect(54, 10, 20, 20, SSD1306_WHITE);
+    display.fillRect(58, 14, 12, 12, SSD1306_BLACK);
     display.setTextSize(1);
     display.setCursor(40, 8);
     display.println("ERROR!");
@@ -124,8 +124,8 @@ void displayWeatherOnOLED(String city, float temp, float feelsLike, int humidity
   display.clearDisplay();
   
   // Draw border
-  display.drawRect(0, 0, 128, 64, SH110X_WHITE);
-  display.drawLine(0, 12, 128, 12, SH110X_WHITE);
+  display.drawRect(0, 0, 128, 64, SSD1306_WHITE);
+  display.drawLine(0, 12, 128, 12, SSD1306_WHITE);
   
   // City name (top, centered)
   display.setTextSize(1);
@@ -172,7 +172,7 @@ void displayWeatherOnOLED(String city, float temp, float feelsLike, int humidity
   display.print(shortDesc);
   
   // Draw separator line
-  display.drawLine(0, 42, 128, 42, SH110X_WHITE);
+  display.drawLine(0, 42, 128, 42, SSD1306_WHITE);
   
   display.display();
 }

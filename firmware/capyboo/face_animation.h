@@ -1,9 +1,9 @@
 
 #include <Wire.h>
 #include <Adafruit_GFX.h>
-#include <Adafruit_SH110X.h>
+#include <Adafruit_SSD1306.h>
 #include "animation_bitmap.h"
-extern Adafruit_SH1106G display;
+extern Adafruit_SSD1306 display;
 int current_frame = 0;
 
 void playWakeupAnimation() {
@@ -418,11 +418,11 @@ const unsigned char* enjoy_bitmap_allArray[7] = {
 void playEnjoyingAnimation() {
 	for (int i = 0; i < enjoy_bitmap_allArray_LEN; i++) {
 	   display_bitmap(enjoy_bitmap_allArray[i]);
-	   delay(40);
+	   delay(50);
    }
    for (int i = enjoy_bitmap_allArray_LEN - 1; i >= 0; i--) {
 	   display_bitmap(enjoy_bitmap_allArray[i]);
-	   delay(40);
+	   delay(50);
    }
 }
 

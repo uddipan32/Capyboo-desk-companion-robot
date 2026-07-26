@@ -2,13 +2,14 @@
 #include "display.h"
 #include <Wire.h>
 
-#include "face_animation.h"
+  #include "face_animation.h"
 #include "weather.h"
 #include "dino_game.h"
 #include "clock.h"
 
 // Touch sensor pin (from definitions.h)
-const int TOUCH_SENSOR_PIN = 4;
+const int TOUCH_SENSOR_PIN_1 = 1;
+const int TOUCH_SENSOR_PIN_2 = 2;
 const int SPEAKER_PIN = 3;
 
 // Mode definitions
@@ -57,20 +58,22 @@ void setup() {
     initBLESerial("Capyboo");
 
     // Initialize touch sensor
-    pinMode(TOUCH_SENSOR_PIN, INPUT);
+
+    pinMode(TOUCH_SENSOR_PIN_1, INPUT);
+    pinMode(TOUCH_SENSOR_PIN_2, INPUT);
     
     // Initialize speaker pin
     pinMode(SPEAKER_PIN, OUTPUT);
 
     // Initialize display
     Wire.begin();
-    if (!display.begin(0x3C, true)) {
-        Serial.println(F("SH1106 allocation failed"));
+    if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+        Serial.println(F("SSD1306 allocation failed"));
         for (;;); // Don't proceed, loop forever
     }
 
     display.clearDisplay();
-    display.setTextColor(SH110X_WHITE);
+    display.setTextColor(SSD1306_WHITE);
     display.setTextSize(3);
     
     // // Center the text
@@ -619,7 +622,9 @@ void loop() {
 
     // Touch sensor handling with long press detection
     if (currentMode != MODE_GAME) {
-        bool currentTouchState = (digitalRead(TOUCH_SENSOR_PIN) == HIGH);
+        // Fix: Check both touch sensor pins correctly
+        // bool currentTouchState = (digitalRead(TOUCH_SENSOR_PIN_1) == HIGH || digitalRead(TOUCH_SENSOR_PIN_2) == HIGH);
+        bool currentTouchState = false;
         unsigned long currentTime = millis();
         
         if (currentTouchState && !touchPressed) {
@@ -627,6 +632,7 @@ void loop() {
             touchPressStartTime = currentTime;
             touchPressed = true;
             veryLongPressTriggered = false; // Reset flag on new press
+            pendingTickleAnimation = false; // Cancel any pending tickle on new press
         } else if (currentTouchState && touchPressed) {
             // Touch still pressed - check for very long press first, then long press
             unsigned long pressDuration = currentTime - touchPressStartTime;
@@ -636,12 +642,19 @@ void loop() {
                 veryLongPressTriggered = true; // Set flag to prevent multiple triggers
                 Serial.println("Very long press detected (2s) - Playing love you animation");
                 
+                // Cancel any pending tickle animation
+                pendingTickleAnimation = false;
+                
                 // Play love you animation with music
                 playLoveYouAnimation();
                 message = "";
                 
-                // Reset touch state
+                // Reset touch state and tap tracking
                 touchPressed = false;
+                tapCount = 0;
+                tapTimestamps[0] = 0;
+                tapTimestamps[1] = 0;
+                tapTimestamps[2] = 0;
             } else if (pressDuration >= LONG_PRESS_DURATION && pressDuration < VERY_LONG_PRESS_DURATION && !tickleAnimationPlaying && !veryLongPressTriggered) {
                 // Long press detected (1 second) - set mood to "love"
                 mood = "love";
@@ -657,7 +670,7 @@ void loop() {
             // Touch released - check what type of press it was
             unsigned long pressDuration = currentTime - touchPressStartTime;
             
-            // Only handle short press if it wasn't a very long press
+            // Only handle short press if it wasn't a very long press and animation isn't playing
             if (pressDuration < LONG_PRESS_DURATION && !tickleAnimationPlaying && !veryLongPressTriggered) {
                 // Short press detected - record this tap
                 lastTapTime = currentTime;
@@ -715,25 +728,29 @@ void loop() {
                     message = "";
                 } else {
                     // Not a triple tap yet - schedule tickle animation after debounce delay
-                    // But only if this is the first tap, or enough time has passed since last tap
-                    if (tapCount == 1 || (currentTime - tapTimestamps[1]) > 200) {
-                        pendingTickleAnimation = true;
-                    }
+                    // Always schedule for single tap to ensure it works
+                    pendingTickleAnimation = true;
                 }
             }
-            // Reset touch state and flags
+            // Always reset touch state when released
             touchPressed = false;
-            veryLongPressTriggered = false;
+            // Only reset veryLongPressTriggered if it was actually triggered (to allow new presses)
+            if (veryLongPressTriggered) {
+                veryLongPressTriggered = false;
+            }
         }
         
         // Check if we should play pending tickle animation (after debounce delay)
+        // This runs every loop iteration to ensure single taps are always processed
         if (pendingTickleAnimation && !tickleAnimationPlaying && 
             (millis() - lastTapTime) >= TAP_DEBOUNCE_DELAY) {
             // Check one more time if triple tap was completed during the delay
             unsigned long checkTime = millis();
-            if (tapCount == 3 && tapTimestamps[0] > 0 && 
-                (tapTimestamps[2] - tapTimestamps[0]) <= TRIPLE_TAP_WINDOW &&
-                (checkTime - tapTimestamps[2]) < TAP_DEBOUNCE_DELAY) {
+            bool isTripleTapNow = (tapCount == 3 && tapTimestamps[0] > 0 && 
+                                  (tapTimestamps[2] - tapTimestamps[0]) <= TRIPLE_TAP_WINDOW &&
+                                  (checkTime - tapTimestamps[2]) < TAP_DEBOUNCE_DELAY);
+            
+            if (isTripleTapNow) {
                 // Triple tap was completed during delay - don't play tickle
                 Serial.println("Triple tap completed during delay - skipping tickle");
                 pendingTickleAnimation = false;
@@ -742,7 +759,7 @@ void loop() {
                 tapTimestamps[1] = 0;
                 tapTimestamps[2] = 0;
             } else {
-                // No triple tap - play tickle animation
+                // No triple tap - play tickle animation (this handles single taps)
                 pendingTickleAnimation = false;
                 tickleAnimationPlaying = true;
                 playTickleStartAnimation();
@@ -814,7 +831,7 @@ void loop() {
             
         case MODE_GAME: {
             // Game mode - run dino game
-            bool touchPressed = digitalRead(TOUCH_SENSOR_PIN) == HIGH;
+            bool touchPressed = digitalRead(TOUCH_SENSOR_PIN_1) == HIGH || digitalRead(TOUCH_SENSOR_PIN_2) == HIGH ;
             runDinoGame(touchPressed);
             break;
         } 
