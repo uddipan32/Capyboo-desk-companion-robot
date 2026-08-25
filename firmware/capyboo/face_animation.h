@@ -608,3 +608,19 @@ void playLoveYouAnimation() {
    // Stop any remaining sound
    analogWrite(SPEAKER_PIN, 0);
 }
+
+// Horse gallop: advance one frame. frameDelayMs controls speed (lower = faster).
+inline void playHorseFrame(int& frameIndex, unsigned long frameDelayMs) {
+	static unsigned long lastFrameMs = 0;
+	unsigned long now = millis();
+	if (now - lastFrameMs < frameDelayMs) {
+		return;
+	}
+	lastFrameMs = now;
+
+	if (frameIndex < 0 || frameIndex >= horse_bitmap_allArray_LEN) {
+		frameIndex = 0;
+	}
+	display_bitmap(horse_bitmap_allArray[frameIndex]);
+	frameIndex = (frameIndex + 1) % horse_bitmap_allArray_LEN;
+}

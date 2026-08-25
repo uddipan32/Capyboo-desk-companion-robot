@@ -194,15 +194,15 @@ void drawGame() {
         display.setCursor((128 - w) / 2, 20);
         display.print("DINO GAME");
         
-        // Center "Touch to jump"
-        display.getTextBounds("Touch to jump", 0, 0, &x1, &y1, &w, &h);
+        // Center "Send: jump"
+        display.getTextBounds("Send: jump", 0, 0, &x1, &y1, &w, &h);
         display.setCursor((128 - w) / 2, 35);
-        display.print("Touch to jump");
+        display.print("Send: jump");
         
-        // Center "Touch to start"
-        display.getTextBounds("Touch to start", 0, 0, &x1, &y1, &w, &h);
+        // Center "to start / jump"
+        display.getTextBounds("to start / jump", 0, 0, &x1, &y1, &w, &h);
         display.setCursor((128 - w) / 2, 50);
-        display.print("Touch to start");
+        display.print("to start / jump");
         
     } else {
         // Game running

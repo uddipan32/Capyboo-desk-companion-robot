@@ -1,7 +1,7 @@
 #include "wifi.h"  // Use wifi.h for WiFi connection management
 #include <ArduinoJson.h>
 #include <HTTPClient.h>  // For ESP32 boards
-#include "secrets.h"
+// #include "secrets.h"
 
 #include "Arduino.h"
 #include <Adafruit_GFX.h>
@@ -18,7 +18,7 @@
 extern Adafruit_SSD1306 display;
 
 // OpenWeatherMap API - GET YOUR FREE API KEY FROM https://openweathermap.org/api
-const String apiKey = WEATHER_API_KEY;
+const String apiKey = "WEATHER_API_KEY";
 const String city = "Guwahati";  // Change to your city
 const String countryCode = "IN";  // Change to your country code
 

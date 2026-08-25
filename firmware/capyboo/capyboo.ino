@@ -1,24 +1,21 @@
-#include "bluetooth.h"
-#include "display.h"
+﻿#include "display.h"
 #include <Wire.h>
 
-  #include "face_animation.h"
-#include "weather.h"
+#include "face_animation.h"
 #include "dino_game.h"
 #include "clock.h"
 
-// Touch sensor pin (from definitions.h)
-const int TOUCH_SENSOR_PIN_1 = 1;
-const int TOUCH_SENSOR_PIN_2 = 2;
 const int SPEAKER_PIN = 3;
 
-// Mode definitions
 enum Mode {
+    MODE_HORSE,
     MODE_ANIMATION,
     MODE_WEATHER,
     MODE_GAME,
-    MODE_CLOCK
+    MODE_CLOCK,
+    MODE_PROGRESS
 };
+
 String message = "";
 String currentCity = "";
 float currentTemperature = 0;
@@ -30,80 +27,201 @@ int currentMinute = 0;
 int currentSecond = 0;
 
 String mood = "random";
+Mode currentMode = MODE_ANIMATION; // overridden in setup if serial host is connected
 
-Mode currentMode = MODE_ANIMATION;  // Default mode
+// Progress mode state
+int progressPercent = 0;
+String progressTop = "Progress";
+String progressBottom = "";
 
-// Touch sensor long press detection
-unsigned long touchPressStartTime = 0;
-bool touchPressed = false;
-const unsigned long LONG_PRESS_DURATION = 1000; // 1 second for long press
-const unsigned long VERY_LONG_PRESS_DURATION = 2000; // 2 seconds for very long press
-bool tickleAnimationPlaying = false;
-bool veryLongPressTriggered = false; // Flag to prevent multiple triggers
+// Horse mode: speed from host CPU percent (0 = slow, 100 = fast)
+int cpuPercent = 0;
+int horseFrameIndex = 0;
+const unsigned long HORSE_DELAY_SLOW_MS = 120; // at 0% CPU
+const unsigned long HORSE_DELAY_FAST_MS = 20;  // at 100% CPU
 
-// Triple-tap detection
-unsigned long tapTimestamps[3] = {0, 0, 0};
-int tapCount = 0;
-const unsigned long TRIPLE_TAP_WINDOW = 3000; // 3 seconds window for triple tap
-unsigned long lastTapTime = 0;
-const unsigned long TAP_DEBOUNCE_DELAY = 300; // Wait 300ms before playing tickle to allow for rapid taps
-bool pendingTickleAnimation = false;
+// Serial input (non-blocking)
+String serialLineBuffer = "";
+bool serialJumpPressed = false;
+unsigned long serialLastByteMs = 0;
+const unsigned long SERIAL_LINE_TIMEOUT_MS = 80; // complete command if no newline arrives
+
+unsigned long horseFrameDelayFromCpu(int percent) {
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
+    // Higher CPU → shorter delay → faster gallop
+    return HORSE_DELAY_SLOW_MS -
+           ((HORSE_DELAY_SLOW_MS - HORSE_DELAY_FAST_MS) * (unsigned long)percent) / 100UL;
+}
+
+
+// Display weather on OLED
+void displayWeatherOnOLED(String city, float temp, float feelsLike, int humidity, String desc) {
+    display.clearDisplay();
+    display.drawRect(0, 0, 128, 64, SSD1306_WHITE);
+    display.drawLine(0, 12, 128, 12, SSD1306_WHITE);
+
+    display.setTextSize(1);
+    display.setCursor(64 - (city.length() * 3), 2);
+    display.print(city);
+
+    display.setTextSize(3);
+    display.setCursor(5, 18);
+    display.print(temp, 0);
+
+    display.setTextSize(1);
+    display.setCursor(45, 20);
+    display.print("o");
+    display.setCursor(50, 18);
+    display.setTextSize(2);
+    display.print("C");
+
+    display.setTextSize(1);
+    display.setCursor(85, 18);
+    display.print("Feels");
+    display.setCursor(85, 28);
+    display.print(feelsLike, 0);
+    display.print("o");
+
+    display.setCursor(5, 48);
+    display.print("H:");
+    display.print(humidity);
+    display.print("%");
+
+    display.setCursor(50, 48);
+    String shortDesc = desc;
+    if (shortDesc.length() > 12) {
+        shortDesc = shortDesc.substring(0, 9) + "...";
+    }
+    if (shortDesc.length() > 0) {
+        char first = shortDesc.charAt(0);
+        if (first >= 'a' && first <= 'z') {
+            shortDesc.setCharAt(0, first - 32);
+        }
+    }
+    display.print(shortDesc);
+
+    display.drawLine(0, 42, 128, 42, SSD1306_WHITE);
+    display.display();
+}
+
+// Progress mode: top title, centered bar, bottom status from serial
+void displayProgressScreen() {
+    display.clearDisplay();
+    display.setTextColor(SSD1306_WHITE);
+    display.setTextSize(1);
+
+    int16_t x1, y1;
+    uint16_t w, h;
+
+    // Top text
+    String top = progressTop;
+    if (top.length() > 21) {
+        top = top.substring(0, 21);
+    }
+    display.getTextBounds(top.c_str(), 0, 0, &x1, &y1, &w, &h);
+    display.setCursor((128 - (int)w) / 2, 4);
+    display.print(top);
+
+    // Progress bar
+    const int barX = 8;
+    const int barY = 24;
+    const int barW = 112;
+    const int barH = 14;
+    int fill = progressPercent;
+    if (fill < 0) fill = 0;
+    if (fill > 100) fill = 100;
+
+    display.drawRect(barX, barY, barW, barH, SSD1306_WHITE);
+    int fillW = ((barW - 4) * fill) / 100;
+    if (fillW > 0) {
+        display.fillRect(barX + 2, barY + 2, fillW, barH - 4, SSD1306_WHITE);
+    }
+
+    // Percent under bar
+    String pct = String(fill) + "%";
+    display.getTextBounds(pct.c_str(), 0, 0, &x1, &y1, &w, &h);
+    display.setCursor((128 - (int)w) / 2, 42);
+    display.print(pct);
+
+    // Bottom text from command
+    String bottom = progressBottom;
+    if (bottom.length() > 21) {
+        bottom = bottom.substring(0, 21);
+    }
+    display.getTextBounds(bottom.c_str(), 0, 0, &x1, &y1, &w, &h);
+    display.setCursor((128 - (int)w) / 2, 54);
+    display.print(bottom);
+
+    display.display();
+}
 
 
 void setup() {
+    Serial.setRxBufferSize(1024);
     Serial.begin(115200);
+    delay(200);
 
-    
-    // Initialize BLE Serial
-    initBLESerial("Capyboo");
+    // Default: horse when a serial host is connected, otherwise face animation
+    unsigned long serialWaitUntil = millis() + 1500;
+    while (millis() < serialWaitUntil) {
+        if (Serial) {
+            break;
+        }
+        delay(10);
+    }
+    currentMode = Serial ? MODE_HORSE : MODE_ANIMATION;
 
-    // Initialize touch sensor
-
-    pinMode(TOUCH_SENSOR_PIN_1, INPUT);
-    pinMode(TOUCH_SENSOR_PIN_2, INPUT);
-    
-    // Initialize speaker pin
     pinMode(SPEAKER_PIN, OUTPUT);
 
-    // Initialize display
     Wire.begin();
     if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
         Serial.println(F("SSD1306 allocation failed"));
-        for (;;); // Don't proceed, loop forever
+        for (;;);
     }
 
     display.clearDisplay();
     display.setTextColor(SSD1306_WHITE);
-    display.setTextSize(3);
-    
-    // // Center the text
-    // int16_t x1, y1;
-    // uint16_t w, h;
-    // display.getTextBounds("Capyboo", 0, 0, &x1, &y1, &w, &h);
-    // int16_t x = (128 - w) / 2;
-    // int16_t y = (64 - h) / 2;
-    // display.setCursor(x, y);
-    // display.println("Capyboo");
-    // display.display();
-    // delay(2000);
-    
-    // Play wakeup animation once at startup
+    display.setTextSize(1);
+
+    // Welcome splash
+    int16_t x1, y1;
+    uint16_t w, h;
+    display.getTextBounds("Welcome back", 0, 0, &x1, &y1, &w, &h);
+    display.setCursor((128 - (int)w) / 2, 18);
+    display.print(F("Welcome back"));
+
+    display.getTextBounds("Underground Editor", 0, 0, &x1, &y1, &w, &h);
+    display.setCursor((128 - (int)w) / 2, 34);
+    display.print(F("Underground Editor"));
+
+    display.display();
+    delay(2000);
+
     playWakeupAnimation();
-    
-    // Initialize random seed for sequence selection
+
     randomSeed(analogRead(0));
-    
-    // Select initial animation sequence based on mood
     selectAnimationSequence();
-    
-    // Display current mode
     displayCurrentMode();
+
+    Serial.println();
+    Serial.println(F("Ready (serial only)."));
+    Serial.println(F("Serial Monitor: 115200 baud, set line ending to Newline."));
+    Serial.println(F("Commands: mode:horse|animation|weather|game|clock|progress"));
+    Serial.println(F("  cpu:<0-100>  mood:<name>  weather:city:temp:feels:humidity:desc"));
+    Serial.println(F("  time:HH:MM:SS  message:<text>  jump  tickle  loveyou"));
+    Serial.println(F("  progress:<0-100>  progress:<0-100>:<bottom>"));
+    Serial.println(F("  progress:<0-100>:<top>:<bottom>"));
+    Serial.println(F("Type 'ping' to test serial."));
 }
 
 // Function to display current mode
 void displayCurrentMode() {
     String modeText = "Mode: ";
     switch (currentMode) {
+        case MODE_HORSE:
+            modeText += "Horse";
+            break;
         case MODE_ANIMATION:
             modeText += "Animation";
             break;
@@ -115,6 +233,9 @@ void displayCurrentMode() {
             break;
         case MODE_CLOCK:
             modeText += "Clock";
+            break;
+        case MODE_PROGRESS:
+            modeText += "Progress";
             break;
     }
 }
@@ -154,56 +275,6 @@ void playTonePattern(int frequency, int duration) {
         delayMicroseconds(halfPeriod);
     }
     analogWrite(SPEAKER_PIN, 0); // Turn off
-}
-
-// Play love you melody - a sweet, romantic melody
-void playLoveYouMelody() {
-    // Musical notes frequencies (in Hz)
-    // C4=262, D4=294, E4=330, F4=349, G4=392, A4=440, B4=494, C5=523, D5=587, E5=659, F5=698, G5=784, A5=880
-    // Melody: A simple, lovely ascending/descending pattern
-    // Pattern: C5-E5-G5-C6-G5-E5-C5 (I love you pattern)
-    int melodyNotes[] = {
-        523,  // C5 - "I"
-        659,  // E5 - "love"
-        784,  // G5 - "you"
-        1047, // C6 - high note
-        784,  // G5
-        659,  // E5
-        523,  // C5
-        659,  // E5 - repeat
-        784,  // G5
-        1047, // C6
-        784,  // G5
-        659,  // E5
-        523,  // C5 - final
-        0     // Rest
-    };
-    
-    int noteDurations[] = {
-        200,  // C5
-        200,  // E5
-        200,  // G5
-        400,  // C6 (longer)
-        200,  // G5
-        200,  // E5
-        300,  // C5 (medium)
-        200,  // E5
-        200,  // G5
-        400,  // C6 (longer)
-        200,  // G5
-        200,  // E5
-        500,  // C5 (final, longer)
-        100   // Rest
-    };
-    
-    int melodyLength = sizeof(melodyNotes) / sizeof(melodyNotes[0]);
-    
-    for (int i = 0; i < melodyLength; i++) {
-        playTonePattern(melodyNotes[i], noteDurations[i]);
-        delay(30); // Small pause between notes for clarity
-    }
-    
-    analogWrite(SPEAKER_PIN, 0); // Ensure speaker is off
 }
 
 // Animation function pointer type
@@ -447,333 +518,260 @@ void selectAnimationSequence() {
         currentAnimationSequence = allSequences[currentSequenceIndex].sequence;
         currentAnimationSequenceLength = allSequences[currentSequenceIndex].length;
         
-        Serial.print("Selected random sequence: ");
+        // Serial.print("Selected random sequence: ");
         Serial.println(currentSequenceIndex);
     }
     
     animationIndex = 0; // Reset to start of new sequence
 }
 
-void loop() {
-    // Handle BLE connection/disconnection (required for BLE communication)
-    handleBLESerial();
-
-    if (bleSerialAvailable()) {
-        String command = bleSerialRead();
-        command.trim();
-        String lowerCommand = command;
-        lowerCommand.toLowerCase();
-        
-        Serial.print("Received BLE command: ");
-        Serial.println(command);
-        // Handle mode switching commands
-        if (lowerCommand.startsWith("mode:")) {
-            String modeStr = lowerCommand.substring(5); // Get text after "mode:"
-            modeStr.trim();
-            
-            if (modeStr == "weather") {
-                currentMode = MODE_WEATHER;
-                bleSerialPrintln("Switched to Weather mode");
-                displayCurrentMode();
-            } else if (modeStr == "game") {
-                currentMode = MODE_GAME;
-                bleSerialPrintln("Switched to Game mode");
-                displayCurrentMode();
-            } else if (modeStr == "animation") {
-                currentMode = MODE_ANIMATION;
-                bleSerialPrintln("Switched to Animation mode");
-                displayCurrentMode();
-            } else if (modeStr == "clock") {
-                currentMode = MODE_CLOCK;
-                bleSerialPrintln("Switched to Clock mode");
-                displayCurrentMode();
-            } else {
-                String errorMsg = "Unknown mode: " + modeStr;
-                display_text(errorMsg.c_str());
-                bleSerialPrintln("Unknown mode. Use: mode:animation, mode:weather, or mode:game");
-                delay(2000);
-            }
-        } else if (lowerCommand.startsWith("weather:")) {
-            Serial.print("Weather command: ");
-            String weatherCommand = lowerCommand.substring(8); // Get text after "weather:"
-            weatherCommand.trim();
-            Serial.print("Parsing: ");
-            Serial.println(weatherCommand);
-            // command format: weather:city:temperature:feels_like:humidity:description
-            // Parse the colon-separated values
-            int pos = 0;
-            int nextPos = weatherCommand.indexOf(":", pos);
-            
-            // Parse city (required)
-            if (nextPos > 0) {
-                currentCity = weatherCommand.substring(pos, nextPos);
-                pos = nextPos + 1;
-                Serial.print("City: ");
-                Serial.println(currentCity);
-            } else if (nextPos == 0) {
-                // Colon at start - empty city
-                bleSerialPrintln("Invalid weather format: city cannot be empty");
-            } else {
-                // No colon found - city is the entire string
-                currentCity = weatherCommand;
-                pos = weatherCommand.length();
-                Serial.print("City (no more fields): ");
-                Serial.println(currentCity);
-            }
-            
-            // Parse temperature (required)
-            if (pos < weatherCommand.length()) {
-                nextPos = weatherCommand.indexOf(":", pos);
-                if (nextPos > pos) {
-                    currentTemperature = weatherCommand.substring(pos, nextPos).toFloat();
-                    pos = nextPos + 1;
-                    Serial.print("Temperature: ");
-                    Serial.println(currentTemperature);
-                } else if (nextPos == -1) {
-                    // No more colons - temperature is the rest
-                    currentTemperature = weatherCommand.substring(pos).toFloat();
-                    pos = weatherCommand.length();
-                    Serial.print("Temperature (last field): ");
-                    Serial.println(currentTemperature);
-                } else {
-                    bleSerialPrintln("Invalid weather format: missing temperature");
-                    pos = weatherCommand.length(); // Skip rest
-                }
-            }
-            
-            // Parse feels_like (required)
-            if (pos < weatherCommand.length()) {
-                nextPos = weatherCommand.indexOf(":", pos);
-                if (nextPos > pos) {
-                    currentFeelsLike = weatherCommand.substring(pos, nextPos).toFloat();
-                    pos = nextPos + 1;
-                    Serial.print("Feels like: ");
-                    Serial.println(currentFeelsLike);
-                } else if (nextPos == -1) {
-                    // No more colons - feels_like is the rest
-                    currentFeelsLike = weatherCommand.substring(pos).toFloat();
-                    pos = weatherCommand.length();
-                    Serial.print("Feels like (last field): ");
-                    Serial.println(currentFeelsLike);
-                } else {
-                    bleSerialPrintln("Invalid weather format: missing feels_like");
-                    pos = weatherCommand.length(); // Skip rest
-                }
-            }
-            
-            // Parse humidity (required, but description is optional)
-            if (pos < weatherCommand.length()) {
-                nextPos = weatherCommand.indexOf(":", pos);
-                if (nextPos > pos) {
-                    // Has description after humidity
-                    currentHumidity = weatherCommand.substring(pos, nextPos).toInt();
-                    pos = nextPos + 1;
-                    currentDescription = weatherCommand.substring(pos);
-                    Serial.print("Humidity: ");
-                    Serial.println(currentHumidity);
-                    Serial.print("Description: ");
-                    Serial.println(currentDescription);
-                } else if (nextPos == -1) {
-                    // No description - humidity is the rest
-                    currentHumidity = weatherCommand.substring(pos).toInt();
-                    currentDescription = "";
-                    Serial.print("Humidity (last field): ");
-                    Serial.println(currentHumidity);
-                } else {
-                    bleSerialPrintln("Invalid weather format: missing humidity");
-                }
-                
-                // Display the weather data
-                displayWeatherOnOLED(currentCity, currentTemperature, currentFeelsLike, currentHumidity, currentDescription);
-                bleSerialPrintln("Weather data updated");
-            } else {
-                bleSerialPrintln("Invalid weather format: missing humidity");
-            }
-        }
-        else if (lowerCommand.startsWith("message:")) {
-            message = lowerCommand.substring(8); // Get text after "message:"
-            message.trim();
-        } else if (lowerCommand.startsWith("mood:")) {
-            String moodStr = lowerCommand.substring(5); // Get text after "mood:"
-            moodStr.trim();
-            moodStr.toLowerCase();
-            mood = moodStr;
-            bleSerialPrintln("Mood set to: " + mood);
-            // Immediately switch to the mood's animation sequence
-            if (currentMode == MODE_ANIMATION) {
-                selectAnimationSequence();
-            }
-        }  else if (lowerCommand.startsWith("time:")) {
-            String clockCommand = lowerCommand.substring(5); // Get text after "time:"
-            clockCommand.trim();
-
-            // command format: clock:HH:MM:SS or clock:HH:MM:SS DD/MM/YYYY
-            // Use the setTimeFromString function from clock.h
-            if (setTimeFromString(clockCommand)) {
-                bleSerialPrintln("Clock time set successfully");
-            } else {
-                bleSerialPrintln("Invalid clock format. Use: clock:HH:MM:SS or clock:HH:MM:SS DD/MM/YYYY");
-            }
-        }
-
+void handleSerialCommand(String command) {
+    command.trim();
+    if (command.length() == 0) {
+        return;
     }
 
-   
+    String lowerCommand = command;
+    lowerCommand.toLowerCase();
 
-    // Touch sensor handling with long press detection
-    if (currentMode != MODE_GAME) {
-        // Fix: Check both touch sensor pins correctly
-        // bool currentTouchState = (digitalRead(TOUCH_SENSOR_PIN_1) == HIGH || digitalRead(TOUCH_SENSOR_PIN_2) == HIGH);
-        bool currentTouchState = false;
-        unsigned long currentTime = millis();
-        
-        if (currentTouchState && !touchPressed) {
-            // Touch just pressed - record start time
-            touchPressStartTime = currentTime;
-            touchPressed = true;
-            veryLongPressTriggered = false; // Reset flag on new press
-            pendingTickleAnimation = false; // Cancel any pending tickle on new press
-        } else if (currentTouchState && touchPressed) {
-            // Touch still pressed - check for very long press first, then long press
-            unsigned long pressDuration = currentTime - touchPressStartTime;
-            
-            if (pressDuration >= VERY_LONG_PRESS_DURATION && !tickleAnimationPlaying && !veryLongPressTriggered) {
-                // Very long press detected (2 seconds) - play love you animation
-                veryLongPressTriggered = true; // Set flag to prevent multiple triggers
-                Serial.println("Very long press detected (2s) - Playing love you animation");
-                
-                // Cancel any pending tickle animation
-                pendingTickleAnimation = false;
-                
-                // Play love you animation with music
-                playLoveYouAnimation();
-                message = "";
-                
-                // Reset touch state and tap tracking
-                touchPressed = false;
-                tapCount = 0;
-                tapTimestamps[0] = 0;
-                tapTimestamps[1] = 0;
-                tapTimestamps[2] = 0;
-            } else if (pressDuration >= LONG_PRESS_DURATION && pressDuration < VERY_LONG_PRESS_DURATION && !tickleAnimationPlaying && !veryLongPressTriggered) {
-                // Long press detected (1 second) - set mood to "love"
-                mood = "love";
-                Serial.println("Long press detected (1s) - mood set to 'love'");
-                
-                // Trigger sequence selection to start love sequence
-                selectAnimationSequence();
-                message = "";
-                
-                // Don't reset touch state yet - wait to see if it becomes very long press
-            }
-        } else if (!currentTouchState && touchPressed) {
-            // Touch released - check what type of press it was
-            unsigned long pressDuration = currentTime - touchPressStartTime;
-            
-            // Only handle short press if it wasn't a very long press and animation isn't playing
-            if (pressDuration < LONG_PRESS_DURATION && !tickleAnimationPlaying && !veryLongPressTriggered) {
-                // Short press detected - record this tap
-                lastTapTime = currentTime;
-                
-                // Clean up old taps outside the time window BEFORE adding new tap
-                while (tapCount > 0 && tapTimestamps[0] > 0 && (currentTime - tapTimestamps[0]) > TRIPLE_TAP_WINDOW) {
-                    // First tap is too old, shift array
-                    tapTimestamps[0] = tapTimestamps[1];
-                    tapTimestamps[1] = tapTimestamps[2];
-                    tapTimestamps[2] = 0;
-                    tapCount--;
-                }
-                
-                // Shift timestamps and add current tap
-                tapTimestamps[0] = tapTimestamps[1];
-                tapTimestamps[1] = tapTimestamps[2];
-                tapTimestamps[2] = currentTime;
-                tapCount++;
-                
-                // Keep only last 3 taps
-                if (tapCount > 3) {
-                    tapCount = 3;
-                }
-                
-                // Debug output
-                Serial.print("Tap #");
-                Serial.print(tapCount);
-                Serial.print(" detected at ");
-                Serial.print(currentTime);
-                if (tapCount >= 3 && tapTimestamps[0] > 0) {
-                    unsigned long timeSpan = tapTimestamps[2] - tapTimestamps[0];
-                    Serial.print(" | Time span: ");
-                    Serial.print(timeSpan);
-                    Serial.print("ms (window: ");
-                    Serial.print(TRIPLE_TAP_WINDOW);
-                    Serial.print("ms)");
-                }
-                Serial.println();
-                
-                // Check if we have exactly 3 taps within the time window
-                bool isTripleTap = (tapCount == 3 && tapTimestamps[0] > 0 && 
-                                   (tapTimestamps[2] - tapTimestamps[0]) <= TRIPLE_TAP_WINDOW);
-                
-                if (isTripleTap) {
-                    // Triple tap detected - cancel pending tickle and play love you animation
-                    Serial.println("*** TRIPLE TAP DETECTED - Playing love you animation ***");
-                    pendingTickleAnimation = false; // Cancel any pending tickle
-                    // Play animation (music is integrated in playLoveYouAnimation)
-                    playLoveYouAnimation(); // Play animation with music
-                    // Reset tap tracking
-                    tapCount = 0;
-                    tapTimestamps[0] = 0;
-                    tapTimestamps[1] = 0;
-                    tapTimestamps[2] = 0;
-                    message = "";
-                } else {
-                    // Not a triple tap yet - schedule tickle animation after debounce delay
-                    // Always schedule for single tap to ensure it works
-                    pendingTickleAnimation = true;
-                }
-            }
-            // Always reset touch state when released
-            touchPressed = false;
-            // Only reset veryLongPressTriggered if it was actually triggered (to allow new presses)
-            if (veryLongPressTriggered) {
-                veryLongPressTriggered = false;
+    Serial.print(F("Received: "));
+    Serial.println(command);
+
+    if (lowerCommand == "ping") {
+        Serial.println(F("pong"));
+        display_text("pong");
+        delay(500);
+        message = "";
+        return;
+    }
+
+    if (lowerCommand == "jump") {
+        serialJumpPressed = true;
+        return;
+    }
+
+    if (lowerCommand == "tickle") {
+        playTickleStartAnimation();
+        playTickleAnimation();
+        playTickleAnimation();
+        playTickleEndAnimation();
+        message = "";
+        return;
+    }
+
+    if (lowerCommand == "loveyou") {
+        playLoveYouAnimation();
+        message = "";
+        return;
+    }
+
+    if (lowerCommand.startsWith("mode:")) {
+        String modeStr = lowerCommand.substring(5);
+        modeStr.trim();
+
+        if (modeStr == "weather") {
+            currentMode = MODE_WEATHER;
+            Serial.println(F("Switched to Weather mode"));
+        } else if (modeStr == "game") {
+            currentMode = MODE_GAME;
+            serialJumpPressed = false;
+            Serial.println(F("Switched to Game mode. Send 'jump' to play."));
+        } else if (modeStr == "horse") {
+            currentMode = MODE_HORSE;
+            Serial.println(F("Switched to Horse mode"));
+        } else if (modeStr == "animation") {
+            currentMode = MODE_ANIMATION;
+            Serial.println(F("Switched to Animation mode"));
+        } else if (modeStr == "clock") {
+            currentMode = MODE_CLOCK;
+            Serial.println(F("Switched to Clock mode"));
+        } else if (modeStr == "progress") {
+            currentMode = MODE_PROGRESS;
+            message = "";
+            Serial.println(F("Switched to Progress mode"));
+            Serial.println(F("Use: progress:<0-100>:<top>:<bottom>"));
+        } else {
+            display_text(("Unknown mode: " + modeStr).c_str());
+            Serial.println(F("Unknown mode. Use: mode:horse, mode:animation, mode:weather, mode:game, mode:clock, or mode:progress"));
+            delay(2000);
+        }
+        displayCurrentMode();
+    } else if (lowerCommand.startsWith("cpu:")) {
+        String percentStr = lowerCommand.substring(4);
+        percentStr.trim();
+        int value = (int)percentStr.toFloat();
+        if (value < 0) value = 0;
+        if (value > 100) value = 100;
+        cpuPercent = value;
+        currentMode = MODE_HORSE;
+        Serial.print(F("CPU "));
+        Serial.print(cpuPercent);
+        Serial.println(F("%"));
+    } else if (lowerCommand.startsWith("progress:")) {
+        // Formats:
+        //   progress:50
+        //   progress:50:bottom text
+        //   progress:50:top text:bottom text
+        String payload = command.substring(9); // keep original case for labels
+        payload.trim();
+
+        int firstColon = payload.indexOf(':');
+        String percentStr = (firstColon < 0) ? payload : payload.substring(0, firstColon);
+        percentStr.trim();
+
+        int value = percentStr.toInt();
+        if (value < 0) value = 0;
+        if (value > 100) value = 100;
+        progressPercent = value;
+
+        if (firstColon >= 0) {
+            String rest = payload.substring(firstColon + 1);
+            int secondColon = rest.indexOf(':');
+            if (secondColon < 0) {
+                progressBottom = rest;
+                progressBottom.trim();
+            } else {
+                progressTop = rest.substring(0, secondColon);
+                progressTop.trim();
+                progressBottom = rest.substring(secondColon + 1);
+                progressBottom.trim();
             }
         }
-        
-        // Check if we should play pending tickle animation (after debounce delay)
-        // This runs every loop iteration to ensure single taps are always processed
-        if (pendingTickleAnimation && !tickleAnimationPlaying && 
-            (millis() - lastTapTime) >= TAP_DEBOUNCE_DELAY) {
-            // Check one more time if triple tap was completed during the delay
-            unsigned long checkTime = millis();
-            bool isTripleTapNow = (tapCount == 3 && tapTimestamps[0] > 0 && 
-                                  (tapTimestamps[2] - tapTimestamps[0]) <= TRIPLE_TAP_WINDOW &&
-                                  (checkTime - tapTimestamps[2]) < TAP_DEBOUNCE_DELAY);
-            
-            if (isTripleTapNow) {
-                // Triple tap was completed during delay - don't play tickle
-                Serial.println("Triple tap completed during delay - skipping tickle");
-                pendingTickleAnimation = false;
-                tapCount = 0;
-                tapTimestamps[0] = 0;
-                tapTimestamps[1] = 0;
-                tapTimestamps[2] = 0;
+
+        currentMode = MODE_PROGRESS;
+        message = "";
+        Serial.print(F("Progress "));
+        Serial.print(progressPercent);
+        Serial.print(F("% | "));
+        Serial.print(progressTop);
+        Serial.print(F(" | "));
+        Serial.println(progressBottom);
+    } else if (lowerCommand.startsWith("weather:")) {
+        String weatherCommand = lowerCommand.substring(8);
+        weatherCommand.trim();
+
+        int pos = 0;
+        int nextPos = weatherCommand.indexOf(":", pos);
+
+        if (nextPos > 0) {
+            currentCity = weatherCommand.substring(pos, nextPos);
+            pos = nextPos + 1;
+        } else if (nextPos == 0) {
+            Serial.println(F("Invalid weather format: city cannot be empty"));
+            return;
+        } else {
+            currentCity = weatherCommand;
+            pos = weatherCommand.length();
+        }
+
+        if (pos < weatherCommand.length()) {
+            nextPos = weatherCommand.indexOf(":", pos);
+            if (nextPos > pos) {
+                currentTemperature = weatherCommand.substring(pos, nextPos).toFloat();
+                pos = nextPos + 1;
+            } else if (nextPos == -1) {
+                currentTemperature = weatherCommand.substring(pos).toFloat();
+                pos = weatherCommand.length();
             } else {
-                // No triple tap - play tickle animation (this handles single taps)
-                pendingTickleAnimation = false;
-                tickleAnimationPlaying = true;
-                playTickleStartAnimation();
-                playTickleAnimation();
-                playTickleAnimation();
-                playTickleEndAnimation();
-                tickleAnimationPlaying = false;
-                message = "";
-                // Reset tap tracking after playing tickle
-                tapCount = 0;
-                tapTimestamps[0] = 0;
-                tapTimestamps[1] = 0;
-                tapTimestamps[2] = 0;
+                Serial.println(F("Invalid weather format: missing temperature"));
+                return;
             }
+        }
+
+        if (pos < weatherCommand.length()) {
+            nextPos = weatherCommand.indexOf(":", pos);
+            if (nextPos > pos) {
+                currentFeelsLike = weatherCommand.substring(pos, nextPos).toFloat();
+                pos = nextPos + 1;
+            } else if (nextPos == -1) {
+                currentFeelsLike = weatherCommand.substring(pos).toFloat();
+                pos = weatherCommand.length();
+            } else {
+                Serial.println(F("Invalid weather format: missing feels_like"));
+                return;
+            }
+        }
+
+        if (pos < weatherCommand.length()) {
+            nextPos = weatherCommand.indexOf(":", pos);
+            if (nextPos > pos) {
+                currentHumidity = weatherCommand.substring(pos, nextPos).toInt();
+                currentDescription = weatherCommand.substring(nextPos + 1);
+            } else {
+                currentHumidity = weatherCommand.substring(pos).toInt();
+                currentDescription = "";
+            }
+            Serial.println(F("Weather data updated"));
+        } else {
+            Serial.println(F("Invalid weather format: missing humidity"));
+        }
+    } else if (lowerCommand.startsWith("message:")) {
+        message = lowerCommand.substring(8);
+        message.trim();
+    } else if (lowerCommand.startsWith("mood:")) {
+        String moodStr = lowerCommand.substring(5);
+        moodStr.trim();
+        moodStr.toLowerCase();
+        mood = moodStr;
+        Serial.println("Mood set to: " + mood);
+        if (currentMode == MODE_ANIMATION) {
+            selectAnimationSequence();
+            lastAnimationTime = 0;
+        }
+    } else if (lowerCommand.startsWith("time:")) {
+        String clockCommand = lowerCommand.substring(5);
+        clockCommand.trim();
+        if (setTimeFromString(clockCommand)) {
+            Serial.println(F("Clock time set successfully"));
+        } else {
+            Serial.println(F("Invalid clock format. Use: time:HH:MM:SS or time:HH:MM:SS DD/MM/YYYY"));
+        }
+    }
+}
+
+void pollSerialInput() {
+    bool gotByte = false;
+    while (Serial.available() > 0) {
+        char c = (char)Serial.read();
+        gotByte = true;
+        serialLastByteMs = millis();
+
+        if (c == '\n' || c == '\r') {
+            if (serialLineBuffer.length() > 0) {
+                handleSerialCommand(serialLineBuffer);
+                serialLineBuffer = "";
+            }
+        } else if (c >= 32 && c <= 126) {
+            // printable ASCII only
+            serialLineBuffer += c;
+            if (serialLineBuffer.length() > 256) {
+                serialLineBuffer = "";
+            }
+        }
+    }
+
+    // If Serial Monitor uses "No line ending", finish the command after a short idle
+    if (!gotByte && serialLineBuffer.length() > 0 &&
+        (millis() - serialLastByteMs) >= SERIAL_LINE_TIMEOUT_MS) {
+        handleSerialCommand(serialLineBuffer);
+        serialLineBuffer = "";
+    }
+}
+
+void loop() {
+    pollSerialInput();
+
+    // Keep default mode in sync with serial host connect/disconnect
+    static bool lastSerialConnected = (bool)Serial;
+    bool serialConnected = (bool)Serial;
+    if (serialConnected != lastSerialConnected) {
+        lastSerialConnected = serialConnected;
+        if (serialConnected) {
+            if (currentMode == MODE_ANIMATION) {
+                currentMode = MODE_HORSE;
+            }
+        } else if (currentMode == MODE_HORSE) {
+            currentMode = MODE_ANIMATION;
         }
     }
 
@@ -782,64 +780,57 @@ void loop() {
         return;
     }
 
-    // Handle different modes
     switch (currentMode) {
+        case MODE_HORSE: {
+            playHorseFrame(horseFrameIndex, horseFrameDelayFromCpu(cpuPercent));
+            break;
+        }
         case MODE_ANIMATION: {
             unsigned long currentTime = millis();
 
-            // If no sequence is selected or sequence is complete, select sequence based on mood (or random)
             if (currentAnimationSequence == nullptr || animationIndex >= currentAnimationSequenceLength) {
-                // If love sequence just completed, reset mood to random
                 if (mood == "love") {
                     mood = "random";
-                    Serial.println("Love sequence completed - mood reset to 'random'");
+                    Serial.println(F("Love sequence completed - mood reset to 'random'"));
                 }
                 selectAnimationSequence();
             }
-            
-            // Calculate delay for current animation (use custom delay or default)
+
             unsigned long requiredDelay = ANIMATION_DELAY;
             if (currentAnimationSequence != nullptr && animationIndex < currentAnimationSequenceLength) {
                 if (currentAnimationSequence[animationIndex].delayMs > 0) {
                     requiredDelay = currentAnimationSequence[animationIndex].delayMs;
                 }
             }
-            
-            // Check if enough time has passed (non-blocking delay)
+
             if (currentTime - lastAnimationTime >= requiredDelay) {
-                // Play next animation in sequence
                 if (currentAnimationSequence != nullptr && animationIndex < currentAnimationSequenceLength) {
-                    currentAnimationSequence[animationIndex].func(); // Call the animation function
+                    pollSerialInput();
+                    currentAnimationSequence[animationIndex].func();
+                    pollSerialInput();
+                    animationIndex++;
+                    lastAnimationTime = millis();
                 }
-                
-                animationIndex++;
-                // When sequence completes, select a new random sequence on next loop iteration
-                if (animationIndex >= currentAnimationSequenceLength) {
-                    // Sequence complete - will select new random sequence on next loop
-                    animationIndex = currentAnimationSequenceLength; // Set to length so condition above triggers
-                }
-                
-                lastAnimationTime = currentTime;
             }
             break;
         }
         case MODE_WEATHER: {
-            // Weather mode - fetch and display weather
             displayWeatherOnOLED(currentCity, currentTemperature, currentFeelsLike, currentHumidity, currentDescription);
             break;
         }
-            
         case MODE_GAME: {
-            // Game mode - run dino game
-            bool touchPressed = digitalRead(TOUCH_SENSOR_PIN_1) == HIGH || digitalRead(TOUCH_SENSOR_PIN_2) == HIGH ;
-            runDinoGame(touchPressed);
-            break;
-        } 
-        case MODE_CLOCK: {
-            // Clock mode - display clock
-            updateClock();
-
+            bool jump = serialJumpPressed;
+            serialJumpPressed = false;
+            runDinoGame(jump);
             break;
         }
-    }    
+        case MODE_CLOCK: {
+            updateClock();
+            break;
+        }
+        case MODE_PROGRESS: {
+            displayProgressScreen();
+            break;
+        }
+    }
 }
